@@ -1,0 +1,46 @@
+{
+	"geode": "5.0.0",
+	"gd": {
+		"win": "2.2081",
+		"android": "2.2081",
+		"mac": "2.2081",
+		"ios": "2.2081"
+	},
+	"id": "yourname.art-agent",
+	"name": "Art Agent",
+	"version": "v1.0.0",
+	"developer": "yourname",
+	"description": "Select a block structure in the editor, describe how it should look, and an AI agent drafts the decoration right in your level.",
+	"settings": {
+		"api-key": {
+			"type": "string",
+			"name": "Gemini API Key",
+			"description": "Free key from aistudio.google.com (Get API key). Stored locally in Geode's save data.",
+			"default": ""
+		},
+		"model": {
+			"type": "string",
+			"name": "Gemini model",
+			"description": "Any Gemini model id that supports generateContent, e.g. gemini-3.5-flash.",
+			"default": "gemini-3.5-flash"
+		},
+		"object-limit": {
+			"type": "int",
+			"name": "Default object limit",
+			"description": "Max number of decoration objects the agent may place.",
+			"default": 500,
+			"min": 10,
+			"max": 2000,
+			"control": { "input": true, "slider": false }
+		},
+		"color-channel-start": {
+			"type": "int",
+			"name": "First color channel used",
+			"description": "The agent uses up to 8 channels starting here. Pick unused ones.",
+			"default": 900,
+			"min": 1,
+			"max": 990,
+			"control": { "input": true, "slider": false }
+		}
+	}
+}
