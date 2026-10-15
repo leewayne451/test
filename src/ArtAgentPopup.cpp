@@ -1,4 +1,5 @@
 #include <cctype>
+#include <Geode/utils/file.hpp>
 #include "ArtAgentPopup.hpp"
 #include "Palette.hpp"
 #include <algorithm>
@@ -200,6 +201,13 @@ void ArtAgentPopup::onClose(CCObject* sender) {
 
 void ArtAgentPopup::request(std::string userMsg) {
 	auto key = Mod::get()->getSettingValue<std::string>("api-key");
+	// fallback: api-key.txt in the mod's save dir (avoids text-box character filtering)
+	{
+		auto path = Mod::get()->getSaveDir() / "api-key.txt";
+		if (auto r = geode::utils::file::readString(path); r.isOk() && !r.unwrap().empty()) {
+			key = r.unwrap();
+		}
+	}
 	// strip whitespace / newlines / quotes picked up when pasting
 	{
 		auto bad = [](unsigned char c) { return std::isspace(c) || c == '"' || c == '\''; };

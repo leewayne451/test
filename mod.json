@@ -15,8 +15,9 @@
 		"api-key": {
 			"type": "string",
 			"name": "Gemini API Key",
-			"description": "Free key from aistudio.google.com (Get API key). Stored locally in Geode's save data.",
-			"default": ""
+			"description": "Free key from aistudio.google.com (Get API key). Stored locally. If dots or underscores get dropped, put the key in api-key.txt inside the mod's save folder instead.",
+			"default": "",
+			"filter": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-"
 		},
 		"model": {
 			"type": "string",
