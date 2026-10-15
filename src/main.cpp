@@ -13,14 +13,14 @@ class $modify(ArtAgentEditorUI, EditorUI) {
 		auto btn = CCMenuItemExt::createSpriteExtra(spr, [this](CCObject*) { this->openArtAgent(); });
 		btn->setID("art-agent-button"_spr);
 
-		if (auto menu = this->getChildByID("undo-menu")) {
-			menu->addChild(btn);
-			menu->updateLayout();
+		if (auto undoMenu = this->getChildByID("undo-menu")) {
+			undoMenu->addChild(btn);
+			undoMenu->updateLayout();
 		} else {
-			auto menu = CCMenu::create();
-			menu->addChild(btn);
-			menu->setPosition(CCDirector::get()->getWinSize() - ccp(30, 80));
-			this->addChild(menu, 10);
+			auto fallback = CCMenu::create();
+			fallback->addChild(btn);
+			fallback->setPosition(CCDirector::get()->getWinSize() - ccp(30, 80));
+			this->addChild(fallback, 10);
 		}
 		return true;
 	}
