@@ -42,7 +42,7 @@ protected:
 	void onVariant(CCObject*);
 	void onDiscard(CCObject*);
 	void onKeep(CCObject*);
-	void onClose() override;
+	void onClose(CCObject*) override;
 
 	std::string stateNote();
 	void request(std::string userMsg);
