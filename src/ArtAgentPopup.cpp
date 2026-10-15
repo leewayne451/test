@@ -6,6 +6,14 @@
 
 static constexpr float B = 30.f; // 1 block in GD units
 
+// Copies a JSON array into a vector (empty if the value isn't an array).
+template <class V>
+static std::vector<matjson::Value> arrOf(V&& v) {
+	std::vector<matjson::Value> out;
+	if (auto r = v.asArray(); r.isOk()) out = r.unwrap();
+	return out;
+}
+
 ArtAgentPopup* ArtAgentPopup::create(EditorUI* ui, std::vector<CCRect> const& rects) {
 	auto ret = new ArtAgentPopup();
 	if (ret->init(ui, rects)) {
@@ -181,12 +189,12 @@ void ArtAgentPopup::onKeep(CCObject*) {
 	auto undo = UndoObject::createWithArray(arr, UndoCommand::Paste);
 	m_ui->m_editorLayer->addToUndoList(undo, false);
 	m_draft.clear();
-	Popup::onClose();
+	Popup::onClose(nullptr);
 }
 
-void ArtAgentPopup::onClose() {
+void ArtAgentPopup::onClose(CCObject* sender) {
 	this->clearDraft(); // closing without Keep discards the draft
-	Popup::onClose();
+	Popup::onClose(sender);
 }
 
 void ArtAgentPopup::request(std::string userMsg) {
@@ -257,9 +265,9 @@ void ArtAgentPopup::request(std::string userMsg) {
 		}
 		auto json = jres.unwrap();
 		std::string text;
-		auto cands = json["candidates"].asArray().unwrapOr(std::vector<matjson::Value>{});
+		auto cands = arrOf(json["candidates"]);
 		if (!cands.empty()) {
-			for (auto& part : cands[0]["content"]["parts"].asArray().unwrapOr(std::vector<matjson::Value>{}))
+			for (auto& part : arrOf(cands[0]["content"]["parts"]))
 				text += part["text"].asString().unwrapOr("");
 		}
 		if (text.empty()) {
@@ -291,7 +299,7 @@ void ArtAgentPopup::handleReply(std::string text) {
 	std::map<int, bool> allowed;
 	for (auto& p : palette()) allowed[p.id] = true;
 
-	for (auto& o : v["objects"].asArray().unwrapOr(std::vector<matjson::Value>{})) {
+	for (auto& o : arrOf(v["objects"])) {
 		DraftSpec s;
 		s.id = (int)o["id"].asInt().unwrapOr(0);
 		if (!allowed.count(s.id)) continue;
@@ -337,7 +345,7 @@ void ArtAgentPopup::spawnDraft(std::vector<DraftSpec> const& specs) {
 		auto it = channels.find(s.color);
 		if (it == channels.end() && channels.size() < 8) {
 			int ch = base + (int)channels.size();
-			auto c = cocos2d::cc3bFromHexString(s.color).unwrapOr(ccc3(255, 255, 255));
+			auto c = cc3bFromHexString(s.color).unwrapOr(ccc3(255, 255, 255));
 			lel->m_effectManager->getColorAction(ch)->m_color = c; // may need extra refresh calls
 			it = channels.emplace(s.color, ch).first;
 		}
