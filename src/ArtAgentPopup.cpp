@@ -584,7 +584,11 @@ void ArtAgentPopup::clearDraft() {
 
 void ArtAgentPopup::spawnDraft(std::vector<DraftSpec> const& specs) {
 	auto lel = m_ui->m_editorLayer;
-	auto em = lel->m_effectManager;
+	std::vector<GJEffectManager*> mgrs;
+	if (lel->m_levelSettings && lel->m_levelSettings->m_effectManager)
+		mgrs.push_back(lel->m_levelSettings->m_effectManager);
+	if (lel->m_effectManager && (mgrs.empty() || mgrs[0] != lel->m_effectManager))
+		mgrs.push_back(lel->m_effectManager);
 	int base = (int)Mod::get()->getSettingValue<int64_t>("color-channel-start");
 	int layer = (int)Mod::get()->getSettingValue<int64_t>("editor-layer");
 	std::map<std::string, int> channels;
@@ -606,13 +610,22 @@ void ArtAgentPopup::spawnDraft(std::vector<DraftSpec> const& specs) {
 		if (it == channels.end() && channels.size() < 8) {
 			int ch = base + (int)channels.size();
 			auto c = cc3bFromHexString(s.color).unwrapOr(ccc3(255, 255, 255));
-			auto action = em->getColorAction(ch);
-			action->m_color = c;
-			action->m_fromColor = c;
-			action->m_toColor = c;
-			action->m_duration = 0.f;
-			action->m_deltaTime = 0.f;
-			em->colorActionChanged(action);
+			// Write the channel to BOTH managers: the level settings one is what gets saved and
+			// what playtest loads; the live one is what the editor is drawing right now.
+			for (auto m : mgrs) {
+				auto action = m->getColorAction(ch);
+				if (!action) continue;
+				action->m_colorID = ch;
+				action->m_color = c;
+				action->m_fromColor = c;
+				action->m_toColor = c;
+				action->m_duration = 0.f;
+				action->m_deltaTime = 0.f;
+				action->m_blending = false;
+				action->m_playerColor = -1; // no player color
+				action->m_copyID = 0;
+				m->colorActionChanged(action);
+			}
 			it = channels.emplace(s.color, ch).first;
 			colorOf[s.color] = c;
 		}
@@ -631,6 +644,6 @@ void ArtAgentPopup::spawnDraft(std::vector<DraftSpec> const& specs) {
 	}
 
 	// make the editor recompute channel colors and redraw the new objects
-	em->calculateBaseActiveColors();
+	for (auto m : mgrs) m->calculateBaseActiveColors();
 	lel->updateObjectColors(fresh);
 }
