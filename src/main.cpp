@@ -13,12 +13,21 @@ class $modify(ArtAgentEditorUI, EditorUI) {
 		auto btn = CCMenuItemExt::createSpriteExtra(spr, [this](CCObject*) { this->openArtAgent(); });
 		btn->setID("art-agent-button"_spr);
 
+		// second button: screenshot the current editor view as a style reference for the AI
+		auto snapLabel = CCLabelBMFont::create("Ref", "bigFont.fnt");
+		auto snapSpr = CircleButtonSprite::create(snapLabel, CircleBaseColor::Green, CircleBaseSize::Small);
+		auto snapBtn = CCMenuItemExt::createSpriteExtra(snapSpr, [this](CCObject*) { ArtAgentPopup::snapReference(this); });
+		snapBtn->setID("art-agent-snap-button"_spr);
+
 		if (auto undoMenu = this->getChildByID("undo-menu")) {
 			undoMenu->addChild(btn);
+			undoMenu->addChild(snapBtn);
 			undoMenu->updateLayout();
 		} else {
 			auto fallback = CCMenu::create();
 			fallback->addChild(btn);
+			fallback->addChild(snapBtn);
+			fallback->alignItemsHorizontallyWithPadding(6.f);
 			fallback->setPosition(CCDirector::get()->getWinSize() - ccp(30, 80));
 			this->addChild(fallback, 10);
 		}

@@ -31,10 +31,11 @@ protected:
 	std::string m_mortarHex;
 	bool m_busy = false;
 	bool m_overhang = false;
-	int m_variant = 0;
+	unsigned m_seed = 0; // layout seed: fixed for the life of the panel, so follow-up requests keep the same brick layout
 
 	TextInput* m_prompt = nullptr;
 	TextInput* m_limitInput = nullptr;
+	TextInput* m_refsInput = nullptr;
 	SimpleTextArea* m_agentText = nullptr;
 	CCLabelBMFont* m_countLabel = nullptr;
 
@@ -49,12 +50,14 @@ protected:
 	void setCount();
 
 	void onSend(CCObject*);
-	void onVariant(CCObject*);
+	void onRefsFolder(CCObject*);
 	void onDiscard(CCObject*);
 	void onKeep(CCObject*);
 	void onClose(CCObject*) override;
 
 	std::string stateNote();
+	// Loads the reference images named in the Refs box as Gemini "inlineData" parts.
+	std::vector<matjson::Value> refParts(std::string& usedNames, std::string& warning);
 	void request(std::string userMsg);
 	void handleReply(std::string text);
 	std::vector<DraftSpec> generateDraft(matjson::Value v);
@@ -62,5 +65,7 @@ protected:
 	void spawnDraft(std::vector<DraftSpec> const& specs);
 
 public:
+	// Screenshots the editor view into <save dir>/references/ so it can be used as a style reference.
+	static void snapReference(EditorUI* ui);
 	static ArtAgentPopup* create(EditorUI* ui, std::vector<CCRect> const& rects, std::vector<CCRect> const& hazards, std::vector<Ref<GameObject>> const& slopes);
 };

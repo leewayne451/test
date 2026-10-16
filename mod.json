@@ -8,7 +8,7 @@
 	},
 	"id": "yourname.art-agent",
 	"name": "Art Agent",
-	"version": "v1.0.0",
+	"version": "v1.1.0",
 	"developer": "yourname",
 	"description": "Select a block structure in the editor, describe how it should look, and an AI agent drafts the decoration right in your level.",
 	"settings": {
@@ -23,14 +23,14 @@
 			"type": "string",
 			"name": "Gemini model",
 			"description": "Any Gemini model id that supports generateContent, e.g. gemini-3.1-flash-lite. If a character won't type, put the model id in model.txt inside the mod's save folder instead.",
-			"default": "gemini-2.5-flash",
+			"default": "gemini-3.8-flash",
 			"filter": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-:/"
 		},
 		"object-limit": {
 			"type": "int",
 			"name": "Default object limit",
 			"description": "Max number of decoration objects the agent may place.",
-			"default": 500,
+			"default": 800,
 			"min": 10,
 			"max": 2000,
 			"control": { "input": true, "slider": false }

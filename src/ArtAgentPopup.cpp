@@ -9,8 +9,16 @@
 #include <sstream>
 #include <random>
 #include <functional>
+#include <filesystem>
+#include <ctime>
+#include <Geode/utils/base64.hpp>
 
 static constexpr float B = 30.f; // 1 block in GD units
+
+// Reference screenshots live here (see the Ref button in the editor and the Refs box in the panel).
+static std::filesystem::path refsDir() {
+	return Mod::get()->getSaveDir() / "references";
+}
 
 static bool inTri(SlopeTri const& t, float x, float y) {
 	float dx = t.ax - t.px, dy = t.by - t.py;
@@ -42,8 +50,9 @@ static ButtonSprite* btnSpr(char const* text, int width, char const* tex = "GJ_b
 }
 
 bool ArtAgentPopup::init(EditorUI* ui, std::vector<CCRect> const& rects, std::vector<CCRect> const& hazards, std::vector<Ref<GameObject>> const& slopes) {
-	if (!Popup::init(230.f, 290.f)) return false;
+	if (!Popup::init(230.f, 312.f)) return false;
 	m_ui = ui;
+	m_seed = std::random_device{}();
 	m_noElasticity = true;
 	this->setTitle("Art Agent");
 	this->setOpacity(0); // don't dim the editor: the draft is previewed live behind this panel
@@ -63,19 +72,28 @@ bool ArtAgentPopup::init(EditorUI* ui, std::vector<CCRect> const& rects, std::ve
 
 	m_countLabel = CCLabelBMFont::create("", "goldFont.fnt");
 	m_countLabel->setScale(0.45f);
-	m_mainLayer->addChildAtPosition(m_countLabel, Anchor::Bottom, {0, 112});
+	m_mainLayer->addChildAtPosition(m_countLabel, Anchor::Bottom, {0, 134});
 
 	m_prompt = TextInput::create(165.f, "Describe the design...", "chatFont.fnt");
 	m_prompt->setMaxCharCount(300);
-	m_mainLayer->addChildAtPosition(m_prompt, Anchor::Bottom, {-24, 90});
+	m_mainLayer->addChildAtPosition(m_prompt, Anchor::Bottom, {-24, 112});
 
 	auto send = CCMenuItemExt::createSpriteExtra(btnSpr("Go", 30), [this](CCObject* s) { onSend(s); });
-	m_buttonMenu->addChildAtPosition(send, Anchor::Bottom, {88, 90});
+	m_buttonMenu->addChildAtPosition(send, Anchor::Bottom, {88, 112});
+
+	// reference screenshots: names of image files in the references folder, comma separated
+	m_refsInput = TextInput::create(165.f, "Refs: name, name", "chatFont.fnt");
+	m_refsInput->setMaxCharCount(200);
+	m_refsInput->setString(Mod::get()->getSavedValue<std::string>("refs", ""));
+	m_mainLayer->addChildAtPosition(m_refsInput, Anchor::Bottom, {-24, 86});
+	auto dirBtn = CCMenuItemExt::createSpriteExtra(btnSpr("Dir", 30, "GJ_button_04.png"),
+		[this](CCObject* s) { onRefsFolder(s); });
+	m_buttonMenu->addChildAtPosition(dirBtn, Anchor::Bottom, {88, 86});
 
 	auto limitLbl = CCLabelBMFont::create("Limit", "bigFont.fnt");
 	limitLbl->setScale(0.35f);
 	m_mainLayer->addChildAtPosition(limitLbl, Anchor::Bottom, {-88, 58});
-	m_limitInput = TextInput::create(50.f, "500", "chatFont.fnt");
+	m_limitInput = TextInput::create(50.f, "800", "chatFont.fnt");
 	m_limitInput->setFilter("0123456789");
 	m_limitInput->setMaxCharCount(4);
 	m_limitInput->setString(std::to_string(Mod::get()->getSettingValue<int64_t>("object-limit")));
@@ -90,15 +108,12 @@ bool ArtAgentPopup::init(EditorUI* ui, std::vector<CCRect> const& rects, std::ve
 	ohLbl->setAnchorPoint({0, 0.5f});
 	m_mainLayer->addChildAtPosition(ohLbl, Anchor::Bottom, {36, 58});
 
-	auto variant = CCMenuItemExt::createSpriteExtra(btnSpr("Another Variant", 100, "GJ_button_04.png"),
-		[this](CCObject* s) { onVariant(s); });
-	m_buttonMenu->addChildAtPosition(variant, Anchor::Bottom, {-52, 28});
-	auto undo = CCMenuItemExt::createSpriteExtra(btnSpr("Undo", 40, "GJ_button_06.png"),
+	auto undo = CCMenuItemExt::createSpriteExtra(btnSpr("Undo", 50, "GJ_button_06.png"),
 		[this](CCObject* s) { onDiscard(s); });
-	m_buttonMenu->addChildAtPosition(undo, Anchor::Bottom, {20, 28});
+	m_buttonMenu->addChildAtPosition(undo, Anchor::Bottom, {-36, 28});
 	auto keep = CCMenuItemExt::createSpriteExtra(btnSpr("Keep", 50),
 		[this](CCObject* s) { onKeep(s); });
-	m_buttonMenu->addChildAtPosition(keep, Anchor::Bottom, {78, 28});
+	m_buttonMenu->addChildAtPosition(keep, Anchor::Bottom, {36, 28});
 
 	this->setCount();
 	return true;
@@ -179,7 +194,7 @@ void ArtAgentPopup::buildGrid(std::vector<CCRect> const& rects, std::vector<CCRe
 }
 
 int ArtAgentPopup::limit() {
-	int v = numFromString<int>(m_limitInput->getString()).unwrapOr(500);
+	int v = numFromString<int>(m_limitInput->getString()).unwrapOr(800);
 	return std::clamp(v, 1, 2000);
 }
 
@@ -190,35 +205,45 @@ void ArtAgentPopup::setCount() {
 }
 
 static std::string systemPrompt() {
-	return
-		"You are the art director inside Geometry Dash's level editor. The player selected a structure made of blocks "
-		"and describes how it should look (stone wall, wood, ice, hell...). You do NOT place objects. You choose a "
-		"visual STYLE, and the mod itself tiles it precisely over the structure's silhouette, adds a mortar backing, "
-		"bevel highlights/shadows and an outline.\n\n"
-		"Reply with ONLY one JSON object, no prose, no code fences:\n"
-		"{\"summary\":\"1-2 short sentences\","
-		"\"pattern\":\"bricks|stones|tiles|planks\","
-		"\"brick_w\":1.0,\"brick_h\":0.5,\"gap\":0.05,"
-		"\"rotation_jitter\":1,\"size_jitter\":0.1,"
-		"\"colors\":[\"#2B1414\",\"#3A1A1A\",\"#4A2222\",\"#5C2A26\"],"
-		"\"mortar\":\"#0D0606\","
-		"\"edge\":{\"style\":\"none|moss|grass|snow|slime|lava\",\"color\":\"#FF5A14\",\"depth\":0.25},"
-		"\"accent\":{\"type\":\"spots|cracks\",\"color\":\"#FF7A1A\",\"density\":0.05}}\n\n"
-		"Field meanings (sizes are in blocks, 1 block = 1 grid square):\n"
-		"- pattern: bricks = running-bond rows; stones = irregular rows of uneven stones; tiles = aligned grid; planks = long horizontal boards.\n"
-		"- brick_w / brick_h: size of one piece (0.25 to 4). gap: seam between pieces (0 to 0.3) showing the mortar.\n"
-		"- rotation_jitter: max random tilt in degrees; keep it SMALL (0 to 2), large values look sloppy. size_jitter: 0 to 0.3.\n"
-		"- colors: 3 or 4 shades of the MAIN material ordered DARKEST to LIGHTEST, close to each other. The mod darkens low areas "
-		"and lightens high areas, and clusters shades into natural patches. Make them clearly distinct, but not wildly different.\n"
-		"- mortar: very dark color for seams, backing and outline (darker than the darkest shade).\n"
-		"- edge: decoration on TOP surfaces. moss/grass = green, snow = white, slime/lava = dripping. depth 0.1 to 0.5. "
-		"For hell use lava with a bright orange color.\n"
-		"- accent: scattered detail. spots = small speckles, cracks = thin slashes. density 0 to 0.3. A glowing accent color "
-		"(orange for hell, cyan for ice) makes the design pop.\n\n"
-		"Style hints: stone castle: stones 1x0.5, greys, moss edge, dark cracks. Wood: planks 3x0.5, gap 0.03, rotation_jitter 0, browns. "
-		"Ice: tiles 1x1, pale blues, white spots, snow edge. Hell: bricks 1x0.5, very dark reds/blacks, lava edge, orange cracks. "
-		"Use at most 4 colors in 'colors'.\n"
-		"If the user asks for changes, return the COMPLETE updated style object.";
+	return R"PROMPT(You are the art director inside Geometry Dash's level editor. The player selected a structure made of blocks and describes how it should look. The theme can be anything: stone castle, wood, ice, hell, sci-fi, neon, desert ruins, toxic sewer, candy, graveyard, deep sea, and so on. You do NOT place objects. You choose a visual STYLE, and the mod itself tiles it precisely over the structure's silhouette, adds a mortar backing, bevel highlights/shadows and an outline.
+
+If reference images are attached, they are screenshots of levels the player likes. Study their palette, material shapes, mood, contrast and level of detail, and make your style capture that feel. Do not try to copy them literally. The written request always wins if it conflicts with the references.
+
+Reply with ONLY one JSON object, no prose, no code fences:
+{"summary":"1-2 short sentences",
+"pattern":"bricks|stones|cobble|tiles|planks",
+"brick_w":1.0,"brick_h":0.5,"gap":0.05,
+"rotation_jitter":1,"size_jitter":0.1,
+"colors":["#2B1414","#3A1A1A","#4A2222","#5C2A26"],
+"mortar":"#0D0606",
+"edge":{"style":"none|moss|grass|snow|frost|slime|lava|blood|sand|neon","color":"#FF5A14","depth":0.25},
+"accent":{"type":"spots|cracks","color":"#FF7A1A","density":0.05},
+"damage":{"missing":0.08,"glow":"#FF5A14"},
+"trim":{"every":0,"color":"#8A8A8A","thickness":0.12},
+"glow":{"color":"#FF5A14","height":0.3,"strength":0.5}}
+
+Field meanings (sizes are in blocks, 1 block = 1 grid square). Only "summary", "pattern" and "colors" are required; every other field is optional, and leaving a feature out (or 0) switches it off.
+- pattern: bricks = running-bond rows; stones = irregular rows of uneven stones; cobble = small, very irregular rounded stones; tiles = aligned grid; planks = long horizontal boards.
+- brick_w / brick_h: size of one piece (0.25 to 4). gap: seam between pieces (0 to 0.3) showing the mortar.
+- rotation_jitter: max random tilt in degrees; keep it SMALL (0 to 2), large values look sloppy. size_jitter: 0 to 0.3.
+- colors: 3 or 4 shades of the MAIN material ordered DARKEST to LIGHTEST, close to each other. The mod darkens low areas and lightens high areas, and clusters shades into natural patches. Make them clearly distinct, but not wildly different. At most 4 colors.
+- mortar: very dark color for seams, backing and outline (darker than the darkest shade).
+- edge: decoration on TOP surfaces. moss/grass = green growth, snow = white, frost = pale icy drips, slime = dripping goo, lava = glowing drips, blood = dark red drips, sand = drifted sand, neon = glowing strip. depth 0.1 to 0.35. Use "none" for clean materials like metal, tech or plain stone.
+- accent: scattered detail. spots = small speckles, cracks = thin slashes. density 0 to 0.3. A bright accent color on cracks makes them glow.
+- damage: "missing" 0 to 0.3 = fraction of pieces left out so seams/holes show. "glow" = optional color that shines out of those holes (ember orange, magical blue, toxic green, light leaking in). Leave glow out for plain holes.
+- trim: a horizontal band across the structure every N rows (every = 2 to 12, 0 = none). Good for castle cornices, tech stripes, wooden beams. Pick a color lighter or different from the main shades.
+- glow: soft light rising from the BOTTOM of the structure. height = fraction of the structure it reaches (0.1 to 0.6), strength 0 to 1. Use it for lava, fire, underwater light, toxic fumes, neon spill; omit for ordinary materials.
+
+Style hints (starting points, not rules; vary freely and match the request):
+- Stone castle: stones 1x0.5, greys, moss edge, dark cracks, trim every 6 in light grey.
+- Wood: planks 3x0.5, gap 0.03, rotation_jitter 0, browns, no edge, a few dark spots.
+- Ice cave: tiles 1x1, pale blues, white spots, frost edge, cyan cracks, glow in pale blue.
+- Hell: bricks 1x0.5, very dark reds/blacks, lava edge, orange cracks, damage glow orange, bottom glow orange.
+- Sci-fi hull: tiles 1x1 or 2x1, cool dark greys/blues, gap 0.08, trim every 3 in cyan, neon edge, no damage.
+- Desert ruins: stones 1x0.5, warm sand and ochre, sand edge, damage 0.15 with no glow.
+- Toxic sewer: bricks 1x0.5, murky greens, slime edge in bright green, damage glow green, bottom glow green.
+- Graveyard / bone: cobble, desaturated grey-purples, moss edge, cracks, a cold pale glow.
+If the user asks for changes, return the COMPLETE updated style object.)PROMPT";
 }
 
 std::string ArtAgentPopup::stateNote() {
@@ -237,14 +262,94 @@ void ArtAgentPopup::onSend(CCObject*) {
 		msg = fmt::format("Change request: {}\n{}", text, stateNote());
 	}
 	m_prompt->setString("");
+	Mod::get()->setSavedValue<std::string>("refs", m_refsInput->getString());
 	this->request(msg);
 }
 
-void ArtAgentPopup::onVariant(CCObject*) {
-	if (m_busy || m_history.empty()) { this->say("Describe a design first."); return; }
-	m_variant++;
-	this->request(fmt::format("Give me another variant (#{}) of the same design. Take a noticeably different "
-		"approach to layout, detail and color.\n{}", m_variant + 1, stateNote()));
+void ArtAgentPopup::onRefsFolder(CCObject*) {
+	std::error_code ec;
+	std::filesystem::create_directories(refsDir(), ec);
+	(void)geode::utils::file::openFolder(refsDir());
+}
+
+// Reads the reference screenshots named in the Refs box (max 4, max 6 MB each).
+std::vector<matjson::Value> ArtAgentPopup::refParts(std::string& usedNames, std::string& warning) {
+	std::vector<matjson::Value> out;
+	std::vector<std::string> missing;
+	std::stringstream ss(m_refsInput->getString());
+	std::string tok;
+	int used = 0;
+	while (std::getline(ss, tok, ',')) {
+		auto bad = [](unsigned char c) { return std::isspace(c) || c == '"' || c == '\''; };
+		while (!tok.empty() && bad(tok.back())) tok.pop_back();
+		size_t a = 0;
+		while (a < tok.size() && bad(tok[a])) a++;
+		tok = tok.substr(a);
+		if (tok.empty()) continue;
+		if (used >= 4) { warning += " Only the first 4 references are used."; break; }
+		// plain file names only: no folders, no ".."
+		if (tok.find('/') != std::string::npos || tok.find('\\') != std::string::npos || tok.find("..") != std::string::npos) {
+			missing.push_back(tok);
+			continue;
+		}
+		std::filesystem::path found;
+		for (char const* ext : {"", ".png", ".jpg", ".jpeg"}) {
+			auto p = refsDir() / (tok + ext);
+			std::error_code ec;
+			if (std::filesystem::is_regular_file(p, ec)) { found = p; break; }
+		}
+		if (found.empty()) { missing.push_back(tok); continue; }
+		auto r = geode::utils::file::readBinary(found);
+		if (r.isErr()) { missing.push_back(tok); continue; }
+		auto bytes = r.unwrap();
+		if (bytes.empty() || bytes.size() > 6u * 1024u * 1024u) { missing.push_back(tok + " (empty or over 6 MB)"); continue; }
+		std::string ext = found.extension().string();
+		for (auto& c : ext) c = (char)std::tolower((unsigned char)c);
+		std::string mime = ext == ".png" ? "image/png" : "image/jpeg";
+		out.push_back(matjson::makeObject({{"inlineData", matjson::makeObject({
+			{"mimeType", mime},
+			{"data", geode::utils::base64::encode(bytes)},
+		})}}));
+		usedNames += (usedNames.empty() ? "" : ", ") + tok;
+		used++;
+	}
+	if (!missing.empty()) {
+		std::string list;
+		for (auto& m : missing) list += (list.empty() ? "" : ", ") + m;
+		warning = "Refs not found: " + list + "." + warning;
+	}
+	return out;
+}
+
+void ArtAgentPopup::snapReference(EditorUI* ui) {
+	std::error_code ec;
+	std::filesystem::create_directories(refsDir(), ec);
+	auto lel = ui->m_editorLayer;
+	auto win = CCDirector::get()->getWinSize();
+	auto rt = CCRenderTexture::create((int)win.width, (int)win.height);
+	if (!rt) {
+		FLAlertLayer::create("Art Agent", "Couldn't capture the editor view.", "OK")->show();
+		return;
+	}
+	rt->begin();
+	lel->visit(); // the level only: no editor UI, no panel
+	rt->end();
+
+	auto name = fmt::format("snap-{}", (long long)std::time(nullptr));
+	auto path = refsDir() / (name + ".png");
+	bool ok = false;
+	if (auto img = rt->newCCImage(true)) {
+		ok = img->saveToFile(geode::utils::string::pathToString(path).c_str(), true);
+		img->release();
+	}
+	std::error_code ec2;
+	if (!ok || !std::filesystem::exists(path, ec2)) {
+		FLAlertLayer::create("Art Agent", "Couldn't save the screenshot. You can also drop any PNG/JPG into the references folder yourself (Dir button in the Art Agent panel).", "OK")->show();
+		return;
+	}
+	FLAlertLayer::create("Art Agent",
+		fmt::format("Saved reference <cy>{}</c>.\nIn the Art Agent panel, type <cy>{}</c> into the Refs box to use it.", name, name),
+		"OK")->show();
 }
 
 void ArtAgentPopup::onDiscard(CCObject*) {
@@ -300,23 +405,28 @@ void ArtAgentPopup::request(std::string userMsg) {
 		parts.push(matjson::makeObject({{"text", t}}));
 		return parts;
 	};
+
+	// reference screenshots ride along with the FIRST user message (the history is re-sent every time)
+	std::string refNames, refWarn;
+	auto refs = this->refParts(refNames, refWarn);
+
 	auto contents = matjson::Value::array();
+	size_t turn = 0;
 	for (auto& [role, content] : m_history) {
+		auto parts = matjson::Value::array();
+		if (turn == 0 && !refs.empty()) {
+			for (auto& img : refs) parts.push(img);
+			parts.push(matjson::makeObject({{"text", fmt::format(
+				"The {} image(s) above are reference screenshots of levels the player likes ({}). "
+				"Use them as style reference.", refs.size(), refNames)}}));
+		}
+		parts.push(matjson::makeObject({{"text", content}}));
 		contents.push(matjson::makeObject({
 			{"role", role == "assistant" ? "model" : "user"},
-			{"parts", textParts(content)},
+			{"parts", parts},
 		}));
+		turn++;
 	}
-
-	auto body = matjson::makeObject({
-		{"systemInstruction", matjson::makeObject({{"parts", textParts(systemPrompt())}})},
-		{"contents", contents},
-		{"generationConfig", matjson::makeObject({
-			{"responseMimeType", "application/json"}, // forces valid JSON output
-			{"maxOutputTokens", 4000},
-			{"thinkingConfig", matjson::makeObject({{"thinkingBudget", 0}})}, // skip slow "thinking" phase (flash models)
-		})},
-	});
 
 	// model id: setting, overridden by model.txt in the mod's save dir if present
 	std::string model = Mod::get()->getSettingValue<std::string>("model");
@@ -331,12 +441,26 @@ void ArtAgentPopup::request(std::string userMsg) {
 		while (i < model.size() && bad(model[i])) i++;
 		model = model.substr(i);
 		if (model.rfind("models/", 0) == 0) model = model.substr(7);
-		if (model.empty()) model = "gemini-2.5-flash";
+		if (model.empty()) model = "gemini-3.8-flash";
 	}
+
+	// Only the 2.5 family takes thinkingBudget:0 to switch thinking off. Newer models are left on their
+	// defaults (so no request errors) and get a bigger output allowance, since thinking tokens count toward it.
+	bool legacyThinking = model.find("2.5") != std::string::npos;
+	auto genCfg = matjson::makeObject({
+		{"responseMimeType", "application/json"}, // forces valid JSON output
+		{"maxOutputTokens", legacyThinking ? 4000 : 8192},
+	});
+	if (legacyThinking) genCfg["thinkingConfig"] = matjson::makeObject({{"thinkingBudget", 0}});
+	auto body = matjson::makeObject({
+		{"systemInstruction", matjson::makeObject({{"parts", textParts(systemPrompt())}})},
+		{"contents", contents},
+		{"generationConfig", genCfg},
+	});
 	auto url = fmt::format("https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent", model);
 
 	m_busy = true;
-	this->say("Thinking...");
+	this->say(refWarn.empty() ? std::string("Thinking...") : "Thinking... " + refWarn);
 
 	web::WebRequest req;
 	req.header("x-goog-api-key", key);
@@ -386,13 +510,13 @@ void ArtAgentPopup::handleReply(std::string text) {
 	auto a = text.find('{'), b = text.rfind('}');
 	if (a == std::string::npos || b == std::string::npos || b < a) {
 		m_history.pop_back();
-		this->say("I couldn't read my own answer. Try again or press Another Variant.");
+		this->say("I couldn't read my own answer. Try sending your request again.");
 		return;
 	}
 	auto parsed = matjson::parse(text.substr(a, b - a + 1));
 	if (parsed.isErr()) {
 		m_history.pop_back();
-		this->say("My answer got cut off or malformed. Try a lower object limit or press Another Variant.");
+		this->say("My answer got cut off or malformed. Try sending your request again.");
 		return;
 	}
 	auto v = parsed.unwrap();
@@ -540,7 +664,24 @@ std::vector<DraftSpec> ArtAgentPopup::generateDraft(matjson::Value v) {
 	bool fx = Mod::get()->getSettingValue<bool>("glow");
 	std::string glowEdge = edgeColor + "|a30|add";
 	std::string glowAcc = accColor + "|a30|add";
-	bool glowy = fx && (edgeStyle == "lava" || edgeStyle == "slime");
+	bool glowy = fx && (edgeStyle == "lava" || edgeStyle == "slime" || edgeStyle == "neon");
+
+	// optional, theme-neutral features (all off unless the style asks for them)
+	auto damageV = v["damage"];
+	auto trimV = v["trim"];
+	auto bglowV = v["glow"];
+	float missing = (float)std::clamp(dbl(damageV, "missing", 0.0), 0.0, 0.3);
+	std::string holeGlow = str(damageV, "glow", "");
+	if (!holeGlow.empty()) holeGlow = hex(holeGlow, "#FF5A14");
+	std::string holeCol = (fx && !holeGlow.empty()) ? holeGlow + "|a60|add" : std::string();
+	int trimEvery = (int)std::clamp(dbl(trimV, "every", 0.0), 0.0, 12.0);
+	std::string trimColor = str(trimV, "color", "");
+	trimColor = trimColor.empty() ? hl : hex(trimColor, hl);
+	float trimTh = (float)std::clamp(dbl(trimV, "thickness", 0.12), 0.06, 0.3);
+	std::string bgColor = str(bglowV, "color", "");
+	if (!bgColor.empty()) bgColor = hex(bgColor, "#FF5A14");
+	float bgHeight = (float)std::clamp(dbl(bglowV, "height", 0.3), 0.1, 0.6);
+	float bgStrength = (float)std::clamp(dbl(bglowV, "strength", 0.5), 0.0, 1.0);
 	bool accGlowy = false;
 	{
 		auto ac = parse(accColor);
@@ -548,8 +689,8 @@ std::vector<DraftSpec> ArtAgentPopup::generateDraft(matjson::Value v) {
 	}
 	std::vector<DraftSpec> glowLayer, accGlowLayer;
 
-	unsigned seed = 1337u + 7919u * (unsigned)m_variant + 104729u * (unsigned)m_history.size()
-		+ (unsigned)(m_cols * 31 + m_rows);
+	// fixed per panel: follow-up requests ("make it redder") keep the same layout instead of re-rolling it
+	unsigned seed = 1337u + m_seed + (unsigned)(m_cols * 31 + m_rows);
 
 	auto mk = [](float x, float y, float rot, float sx, float sy, std::string const& color) {
 		DraftSpec s;
@@ -599,7 +740,7 @@ std::vector<DraftSpec> ArtAgentPopup::generateDraft(matjson::Value v) {
 		std::mt19937 g(seed);
 		float w = bw * k, h = bh * k;
 		bool stagger = pattern != "tiles";
-		float irr = pattern == "stones" ? 0.3f : 0.f;
+		float irr = pattern == "stones" ? 0.3f : pattern == "cobble" ? 0.45f : 0.f;
 		float e = 0.05f;
 		float y = 0.f;
 		int r = 0;
@@ -613,6 +754,11 @@ std::vector<DraftSpec> ArtAgentPopup::generateDraft(matjson::Value v) {
 			// pieces only ever shrink, so neighbours never overlap
 			float fw = std::max(0.12f, (pwid - gap) * (1.f - frand(g, 0.f, sizeJ) * 0.5f));
 			float fh = std::max(0.12f, (phei - gap) * (1.f - frand(g, 0.f, sizeJ) * 0.5f));
+			// damage: leave this piece out; the mortar backing shows through, optionally with a glow inside
+			if (missing > 0.f && frand(g, 0.f, 1.f) < missing) {
+				if (!holeCol.empty()) out.push_back(mk(px, py, 0.f, fw * 0.8f, fh * 0.7f, holeCol));
+				return;
+			}
 			float rot = frand(g, -rotJ, rotJ);
 			// color: smooth patches + lighter toward the top + a little randomness
 			float n = vnoise(px / 2.5f, py / 2.5f, seed);
@@ -715,7 +861,7 @@ std::vector<DraftSpec> ArtAgentPopup::generateDraft(matjson::Value v) {
 		std::vector<DraftSpec> out;
 		if (edgeStyle == "none") return out;
 		std::mt19937 g(seed + 1);
-		bool drips = edgeStyle == "moss" || edgeStyle == "slime" || edgeStyle == "lava";
+		bool drips = edgeStyle == "moss" || edgeStyle == "slime" || edgeStyle == "lava" || edgeStyle == "frost" || edgeStyle == "blood";
 		for (int j = 0; j < m_rows; j++) for (int i = 0; i < m_cols; i++) {
 			if (rows[j][i] != '#' || occ(i + 0.5f, j + 1.08f)) continue;
 			float n = vnoise(i * 0.8f, 7.f, seed + 5);
@@ -784,6 +930,44 @@ std::vector<DraftSpec> ArtAgentPopup::generateDraft(matjson::Value v) {
 		return out;
 	};
 
+	// ---- 4c) trim: horizontal band every N rows (cornice / stripe / beam), only where solid blocks sit above and below
+	auto genTrim = [&]() {
+		std::vector<DraftSpec> out;
+		if (trimEvery < 2) return out;
+		for (int b = trimEvery; b < m_rows; b += trimEvery) {
+			int i = 0;
+			while (i < m_cols) {
+				if (!(rows[b - 1][i] == '#' && rows[b][i] == '#')) { i++; continue; }
+				int st = i;
+				while (i < m_cols && rows[b - 1][i] == '#' && rows[b][i] == '#') i++;
+				out.push_back(mk(st + (i - st) / 2.f, (float)b, 0.f, (float)(i - st), trimTh, trimColor));
+			}
+		}
+		return out;
+	};
+
+	// ---- 4d) soft light rising from the bottom (additive, two opacity steps)
+	auto genBottomGlow = [&]() {
+		std::vector<DraftSpec> out;
+		if (!fx || bgStrength <= 0.f || bgColor.empty()) return out;
+		for (int j = 0; j < m_rows; j++) {
+			float f = (j + 0.5f) / (float)m_rows;
+			if (f >= bgHeight) break;
+			float t = 1.f - f / bgHeight;
+			int op = (int)std::lround(bgStrength * (t > 0.5f ? 45.f : 22.f));
+			if (op < 4) continue;
+			std::string col = fmt::format("{}|a{}|add", bgColor, op);
+			int i = 0;
+			while (i < m_cols) {
+				if (rows[j][i] != '#') { i++; continue; }
+				int st = i;
+				while (i < m_cols && rows[j][i] == '#') i++;
+				out.push_back(mk(st + (i - st) / 2.f, j + 0.5f, 0.f, (float)(i - st), 1.f, col));
+			}
+		}
+		return out;
+	};
+
 	// ---- 5) crisp outline around the exposed silhouette (including slope diagonals)
 	auto genOutline = [&]() {
 		std::vector<DraftSpec> out;
@@ -807,6 +991,8 @@ std::vector<DraftSpec> ArtAgentPopup::generateDraft(matjson::Value v) {
 	int L = limit();
 	auto backing = genBacking();
 	auto shade = genShade();
+	auto trimBands = genTrim();
+	auto bottomGlow = genBottomGlow();
 	auto edge = genEdge();   // also fills glowLayer
 	auto acc = genAccent();  // also fills accGlowLayer
 	auto outline = genOutline();
@@ -820,10 +1006,13 @@ std::vector<DraftSpec> ArtAgentPopup::generateDraft(matjson::Value v) {
 	if (acc.size() > accCap) { std::shuffle(acc.begin(), acc.end(), trim); acc.resize(accCap); }
 	if (glow.size() > glowCap) { std::shuffle(glow.begin(), glow.end(), trim); glow.resize(glowCap); }
 	if ((int)outline.size() > (int)(L * 0.2f)) outline.clear();
+	if ((int)trimBands.size() > (int)(L * 0.08f)) trimBands.clear();
+	if ((int)bottomGlow.size() > (int)(L * 0.1f)) bottomGlow.clear();
 	auto reserveOf = [&]() {
-		return (int)(backing.size() + shade.size() + glow.size() + edge.size() + acc.size() + outline.size());
+		return (int)(backing.size() + shade.size() + trimBands.size() + bottomGlow.size()
+			+ glow.size() + edge.size() + acc.size() + outline.size());
 	};
-	if (reserveOf() > (int)(L * 0.6f)) { outline.clear(); acc.clear(); glow.clear(); shade.clear(); }
+	if (reserveOf() > (int)(L * 0.6f)) { outline.clear(); acc.clear(); glow.clear(); shade.clear(); trimBands.clear(); bottomGlow.clear(); }
 	if (reserveOf() > (int)(L * 0.6f)) backing.clear();
 	int reserve = reserveOf();
 
@@ -845,10 +1034,12 @@ std::vector<DraftSpec> ArtAgentPopup::generateDraft(matjson::Value v) {
 
 	std::vector<DraftSpec> all;
 	all.reserve(bricks.size() + reserve);
-	// order = draw order: mortar, bricks, shading, glow, accents, outline, crust on top
+	// order = draw order: mortar, bricks (+ glow in damaged holes), shading, trim, bottom glow, glow, accents, outline, crust on top
 	for (auto& s2 : backing) all.push_back(s2);
 	for (auto& s2 : bricks) all.push_back(s2);
 	for (auto& s2 : shade) all.push_back(s2);
+	for (auto& s2 : trimBands) all.push_back(s2);
+	for (auto& s2 : bottomGlow) all.push_back(s2);
 	for (auto& s2 : glow) all.push_back(s2);
 	for (auto& s2 : acc) all.push_back(s2);
 	for (auto& s2 : outline) all.push_back(s2);
@@ -887,7 +1078,7 @@ void ArtAgentPopup::spawnDraft(std::vector<DraftSpec> const& specs) {
 	std::vector<std::pair<GameObject*, float>> translucent;
 	auto fresh = CCArray::create();
 
-	// one color channel per distinct color (max 8); returns -1 if none could be made
+	// one color channel per distinct color (max 16); returns -1 if none could be made
 	auto chanFor = [&](std::string const& color) -> int {
 		auto it = channels.find(color);
 		if (it != channels.end()) return it->second;
