@@ -44,6 +44,12 @@
 			"max": 999,
 			"control": { "input": true, "slider": false }
 		},
+		"recolor-slopes": {
+			"type": "bool",
+			"name": "Recolor selected slopes",
+			"description": "Tint the original slope objects with the mortar color so gaps between bricks match (undone if you discard the draft).",
+			"default": true
+		},
 		"color-channel-start": {
 			"type": "int",
 			"name": "First color channel used",

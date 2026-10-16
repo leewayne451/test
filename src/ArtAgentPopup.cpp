@@ -7,8 +7,16 @@
 #include <map>
 #include <sstream>
 #include <random>
+#include <functional>
 
 static constexpr float B = 30.f; // 1 block in GD units
+
+static bool inTri(SlopeTri const& t, float x, float y) {
+	float dx = t.ax - t.px, dy = t.by - t.py;
+	if (std::abs(dx) < 1e-4f || std::abs(dy) < 1e-4f) return false;
+	float u = (x - t.px) / dx, v = (y - t.py) / dy;
+	return u >= 0.f && v >= 0.f && u + v <= 1.f;
+}
 
 // Copies a JSON array into a vector (empty if the value isn't an array).
 template <class V>
@@ -18,9 +26,9 @@ static std::vector<matjson::Value> arrOf(V&& v) {
 	return out;
 }
 
-ArtAgentPopup* ArtAgentPopup::create(EditorUI* ui, std::vector<CCRect> const& rects) {
+ArtAgentPopup* ArtAgentPopup::create(EditorUI* ui, std::vector<CCRect> const& rects, std::vector<CCRect> const& hazards, std::vector<Ref<GameObject>> const& slopes) {
 	auto ret = new ArtAgentPopup();
-	if (ret->init(ui, rects)) {
+	if (ret->init(ui, rects, hazards, slopes)) {
 		ret->autorelease();
 		return ret;
 	}
@@ -32,7 +40,7 @@ static ButtonSprite* btnSpr(char const* text, int width, char const* tex = "GJ_b
 	return ButtonSprite::create(text, width, true, "bigFont.fnt", tex, 24.f, 0.5f);
 }
 
-bool ArtAgentPopup::init(EditorUI* ui, std::vector<CCRect> const& rects) {
+bool ArtAgentPopup::init(EditorUI* ui, std::vector<CCRect> const& rects, std::vector<CCRect> const& hazards, std::vector<Ref<GameObject>> const& slopes) {
 	if (!Popup::init(230.f, 290.f)) return false;
 	m_ui = ui;
 	m_noElasticity = true;
@@ -43,14 +51,14 @@ bool ArtAgentPopup::init(EditorUI* ui, std::vector<CCRect> const& rects) {
 	auto win = CCDirector::get()->getWinSize();
 	m_mainLayer->setPositionX(m_mainLayer->getPositionX() + (win.width / 2 - m_size.width / 2 - 8));
 
-	this->buildGrid(rects);
+	this->buildGrid(rects, hazards, slopes);
 
 	m_agentText = SimpleTextArea::create("", "chatFont.fnt", 0.6f, 205.f);
 	m_agentText->setAnchorPoint({0.5f, 1.f});
 	m_mainLayer->addChildAtPosition(m_agentText, Anchor::Top, {0, -34});
 	this->say(m_tooBig
 		? "That selection is too large (max 100x80 blocks). Select a smaller part."
-		: "Tell me what to draw on the " + std::to_string(rects.size()) + " selected blocks.");
+		: "Tell me what to draw on the " + std::to_string(rects.size() + slopes.size()) + " selected blocks.");
 
 	m_countLabel = CCLabelBMFont::create("", "goldFont.fnt");
 	m_countLabel->setScale(0.45f);
@@ -96,11 +104,19 @@ bool ArtAgentPopup::init(EditorUI* ui, std::vector<CCRect> const& rects) {
 }
 
 // Rasterise the selection into a block grid so the model can "see" the shape.
-void ArtAgentPopup::buildGrid(std::vector<CCRect> const& rects) {
+void ArtAgentPopup::buildGrid(std::vector<CCRect> const& rects, std::vector<CCRect> const& hazards, std::vector<Ref<GameObject>> const& slopes) {
+	m_tris.clear();
+	m_slopeObjs = slopes;
+
+	std::vector<CCRect> slopeRects;
+	for (auto const& so : slopes) slopeRects.push_back(static_cast<GameObject*>(so)->getObjectRect());
+
 	float minX = 1e9f, minY = 1e9f, maxX = -1e9f, maxY = -1e9f;
-	for (auto const& r : rects) {
-		minX = std::min(minX, r.getMinX()); minY = std::min(minY, r.getMinY());
-		maxX = std::max(maxX, r.getMaxX()); maxY = std::max(maxY, r.getMaxY());
+	for (auto const* group : {&rects, &hazards, &slopeRects}) {
+		for (auto const& r : *group) {
+			minX = std::min(minX, r.getMinX()); minY = std::min(minY, r.getMinY());
+			maxX = std::max(maxX, r.getMaxX()); maxY = std::max(maxY, r.getMaxY());
+		}
 	}
 	m_origin = ccp(std::floor(minX / B) * B, std::floor(minY / B) * B);
 	m_cols = (int)std::ceil((maxX - m_origin.x) / B);
@@ -116,6 +132,44 @@ void ArtAgentPopup::buildGrid(std::vector<CCRect> const& rects) {
 		for (int j = std::max(j0, 0); j < std::min(j1, m_rows); j++)
 			for (int i = std::max(i0, 0); i < std::min(i1, m_cols); i++)
 				rows[j][i] = '#';
+	}
+
+	// Slopes -> right triangles. Default slope sprite has its right angle at the bottom-right;
+	// flips apply in local space, then rotation (clockwise, snapped to 90 degrees).
+	for (size_t k = 0; k < slopes.size(); k++) {
+		GameObject* o = slopes[k];
+		auto const& R = slopeRects[k];
+		float x0 = (R.getMinX() - m_origin.x) / B, x1 = (R.getMaxX() - m_origin.x) / B;
+		float y0 = (R.getMinY() - m_origin.y) / B, y1 = (R.getMaxY() - m_origin.y) / B;
+		int sx = 1, sy = -1;
+		if (o->m_isFlipX) sx = -sx;
+		if (o->m_isFlipY) sy = -sy;
+		int q = ((int)std::lround(o->getRotation() / 90.f) % 4 + 4) % 4;
+		for (int n = 0; n < q; n++) { int nx = sy, ny = -sx; sx = nx; sy = ny; } // 90 deg clockwise
+		SlopeTri t;
+		t.px = sx > 0 ? x1 : x0; t.py = sy > 0 ? y1 : y0;
+		t.ax = sx > 0 ? x0 : x1; t.ay = t.py;
+		t.bx = t.px;             t.by = sy > 0 ? y0 : y1;
+		t.rising = (sx > 0) != (sy > 0);
+		m_tris.push_back(t);
+	}
+
+	// show slope cells to the model ('/' rising hypotenuse, '\\' falling); geometry itself is handled by the mod
+	for (int j = 0; j < m_rows; j++) for (int i = 0; i < m_cols; i++) {
+		if (rows[j][i] != '.') continue;
+		for (auto const& t : m_tris) {
+			int hit = 0;
+			for (int a = 0; a < 3; a++) for (int c = 0; c < 3; c++)
+				if (inTri(t, i + (a + 0.5f) / 3.f, j + (c + 0.5f) / 3.f)) hit++;
+			if (hit >= 4) { rows[j][i] = t.rising ? '/' : '\\'; break; }
+		}
+	}
+
+	// hazards (spikes, saws...): mark the cell they sit in as 'S'; they are left untouched
+	for (auto const& h : hazards) {
+		int i = (int)std::floor((h.getMidX() - m_origin.x) / B);
+		int j = (int)std::floor((h.getMidY() - m_origin.y) / B);
+		if (i >= 0 && j >= 0 && i < m_cols && j < m_rows && rows[j][i] == '.') rows[j][i] = 'S';
 	}
 	std::ostringstream os;
 	for (int j = m_rows - 1; j >= 0; j--) os << rows[j] << "\n"; // top row first
@@ -175,7 +229,7 @@ void ArtAgentPopup::onSend(CCObject*) {
 	if (m_busy || m_tooBig || text.empty()) return;
 	std::string msg;
 	if (m_history.empty()) {
-		msg = fmt::format("Structure grid, {} columns x {} rows, top row first ('#' = block, '.' = empty):\n{}\n{}\nRequest: {}",
+		msg = fmt::format("Structure grid, {} columns x {} rows, top row first ('#' = block, '/' or '\\' = slope, 'S' = spike/hazard left untouched, '.' = empty):\n{}\n{}\nRequest: {}",
 			m_cols, m_rows, m_grid, stateNote(), text);
 	} else {
 		msg = fmt::format("Change request: {}\n{}", text, stateNote());
@@ -205,6 +259,7 @@ void ArtAgentPopup::onKeep(CCObject*) {
 	auto undo = UndoObject::createWithArray(arr, UndoCommand::Paste);
 	m_ui->m_editorLayer->addToUndoList(undo, false);
 	m_draft.clear();
+	m_recolored.clear(); // keeping the draft also keeps the mortar-tinted slopes
 	Popup::onClose(nullptr);
 }
 
@@ -419,8 +474,9 @@ std::vector<DraftSpec> ArtAgentPopup::generateDraft(matjson::Value v) {
 	}
 	auto occ = [&](float x, float y) {
 		int i = (int)std::floor(x), j = (int)std::floor(y);
-		if (i < 0 || j < 0 || i >= m_cols || j >= m_rows) return false;
-		return rows[j][i] == '#';
+		if (i >= 0 && j >= 0 && i < m_cols && j < m_rows && rows[j][i] == '#') return true;
+		for (auto const& t : m_tris) if (inTri(t, x, y)) return true;
+		return false;
 	};
 
 	auto str = [](matjson::Value& o, char const* k, std::string d) -> std::string {
@@ -460,6 +516,7 @@ std::vector<DraftSpec> ArtAgentPopup::generateDraft(matjson::Value v) {
 			mortar = hexOf(ccc3((GLubyte)(d.r * 0.4f), (GLubyte)(d.g * 0.4f), (GLubyte)(d.b * 0.4f)));
 		}
 	}
+	m_mortarHex = mortar;
 	// bevel highlight: a lighter tint of the lightest shade
 	std::string hl;
 	{
@@ -517,6 +574,42 @@ std::vector<DraftSpec> ArtAgentPopup::generateDraft(matjson::Value v) {
 		float y = 0.f;
 		int r = 0;
 		int N = (int)base.size();
+
+		auto cornersIn = [&](float L, float R, float B2, float T) {
+			return occ(L + e, B2 + e) && occ(R - e, B2 + e) && occ(L + e, T - e) && occ(R - e, T - e)
+				&& occ((L + R) / 2, (B2 + T) / 2);
+		};
+		auto place = [&](float px, float py, float pwid, float phei) {
+			// pieces only ever shrink, so neighbours never overlap
+			float fw = std::max(0.12f, (pwid - gap) * (1.f - frand(g, 0.f, sizeJ) * 0.5f));
+			float fh = std::max(0.12f, (phei - gap) * (1.f - frand(g, 0.f, sizeJ) * 0.5f));
+			float rot = frand(g, -rotJ, rotJ);
+			// color: smooth patches + lighter toward the top + a little randomness
+			float n = vnoise(px / 2.5f, py / 2.5f, seed);
+			n = std::clamp(0.5f + (n - 0.5f) * 1.5f, 0.f, 1.f);
+			float yf = m_rows > 0 ? py / (float)m_rows : 0.5f;
+			float tt = n * 0.55f + yf * 0.2f + frand(g, 0.f, 0.25f);
+			int ci = std::clamp((int)(tt * N), 0, N - 1);
+			out.push_back(mk(px, py, rot, fw, fh, base[ci]));
+			if (bevel && fw > 0.45f && fh > 0.28f) {
+				float sr = std::sin(rot * 0.0174533f), cr = std::cos(rot * 0.0174533f);
+				float d = fh / 2 - 0.045f;
+				out.push_back(mk(px + d * sr, py + d * cr, rot, fw * 0.94f, 0.07f, hl));
+				out.push_back(mk(px - d * sr, py - d * cr, rot, fw * 0.94f, 0.07f, mortar));
+			}
+		};
+		// Fit a piece; if it pokes outside the shape (block edge or slope diagonal), split it
+		// into quarters (up to 2 levels) so edges follow the silhouette with smaller bricks.
+		std::function<void(float, float, float, float, int)> fill = [&](float L, float R, float B2, float T, int depth) {
+			float ww = R - L, hh = T - B2;
+			if (ww < 0.12f || hh < 0.12f) return;
+			if (cornersIn(L, R, B2, T)) { place((L + R) / 2, (B2 + T) / 2, ww, hh); return; }
+			if (depth >= 2) return;
+			float mx = (L + R) / 2, my = (B2 + T) / 2;
+			fill(L, mx, B2, my, depth + 1); fill(mx, R, B2, my, depth + 1);
+			fill(L, mx, my, T, depth + 1); fill(mx, R, my, T, depth + 1);
+		};
+
 		while (y < (float)m_rows - 0.05f) {
 			float rh = h * (irr > 0 ? frand(g, 1.f - irr, 1.f + irr) : 1.f);
 			float x = stagger ? (irr > 0 ? -frand(g, 0.f, w) : ((r % 2) ? -w * 0.5f : 0.f)) : 0.f;
@@ -532,41 +625,10 @@ std::vector<DraftSpec> ArtAgentPopup::generateDraft(matjson::Value v) {
 				if (ww < 0.15f || hh < 0.15f) continue;
 				float cx = (l + rg) / 2, cy = (b + t) / 2;
 
-				auto cornersIn = [&](float L, float R, float B2, float T) {
-					return occ(L + e, B2 + e) && occ(R - e, B2 + e) && occ(L + e, T - e) && occ(R - e, T - e)
-						&& occ((L + R) / 2, (B2 + T) / 2);
-				};
-				auto place = [&](float px, float py, float pwid, float phei) {
-					// pieces only ever shrink, so neighbours never overlap
-					float fw = std::max(0.12f, (pwid - gap) * (1.f - frand(g, 0.f, sizeJ) * 0.5f));
-					float fh = std::max(0.12f, (phei - gap) * (1.f - frand(g, 0.f, sizeJ) * 0.5f));
-					float rot = frand(g, -rotJ, rotJ);
-					// color: smooth patches + lighter toward the top + a little randomness
-					float n = vnoise(px / 2.5f, py / 2.5f, seed);
-					n = std::clamp(0.5f + (n - 0.5f) * 1.5f, 0.f, 1.f);
-					float yf = m_rows > 0 ? py / (float)m_rows : 0.5f;
-					float tt = n * 0.55f + yf * 0.2f + frand(g, 0.f, 0.25f);
-					int ci = std::clamp((int)(tt * N), 0, N - 1);
-					out.push_back(mk(px, py, rot, fw, fh, base[ci]));
-					if (bevel && fw > 0.45f && fh > 0.28f) {
-						float sr = std::sin(rot * 0.0174533f), cr = std::cos(rot * 0.0174533f);
-						float d = fh / 2 - 0.045f;
-						out.push_back(mk(px + d * sr, py + d * cr, rot, fw * 0.94f, 0.07f, hl));
-						out.push_back(mk(px - d * sr, py - d * cr, rot, fw * 0.94f, 0.07f, mortar));
-					}
-				};
-
 				if (m_overhang) {
 					if (occ(cx, cy)) place(cx, cy, ww, hh);
-				} else if (cornersIn(l, rg, b, t)) {
-					place(cx, cy, ww, hh);
 				} else {
-					// partial piece along an irregular edge: fill with quarter pieces that fit
-					for (int qx = 0; qx < 2; qx++) for (int qy = 0; qy < 2; qy++) {
-						float ql = l + qx * ww / 2, qr = ql + ww / 2;
-						float qb = b + qy * hh / 2, qt = qb + hh / 2;
-						if (cornersIn(ql, qr, qb, qt)) place((ql + qr) / 2, (qb + qt) / 2, ww / 2, hh / 2);
-					}
+					fill(l, rg, b, t, 0);
 				}
 			}
 			y += rh;
@@ -575,14 +637,51 @@ std::vector<DraftSpec> ArtAgentPopup::generateDraft(matjson::Value v) {
 		return out;
 	};
 
-	// ---- 3) edge crust along exposed top surfaces (continuous, follows the silhouette)
+	// Slope triangle edges with outward normals (for crust / outline along diagonals)
+	struct Seg { float x0, y0, x1, y1, nx, ny; };
+	auto segsOf = [](SlopeTri const& t) {
+		std::vector<Seg> out;
+		float vx[3] = {t.px, t.ax, t.bx}, vy[3] = {t.py, t.ay, t.by};
+		int pairs[3][3] = {{0, 1, 2}, {0, 2, 1}, {1, 2, 0}}; // segment endpoints + opposite vertex
+		for (auto& pr : pairs) {
+			Seg sg{vx[pr[0]], vy[pr[0]], vx[pr[1]], vy[pr[1]], 0.f, 0.f};
+			float dx = sg.x1 - sg.x0, dy = sg.y1 - sg.y0;
+			float len = std::sqrt(dx * dx + dy * dy);
+			if (len < 1e-3f) continue;
+			float nx = -dy / len, ny = dx / len;
+			if (nx * (vx[pr[2]] - sg.x0) + ny * (vy[pr[2]] - sg.y0) > 0.f) { nx = -nx; ny = -ny; } // point away from interior
+			sg.nx = nx; sg.ny = ny;
+			out.push_back(sg);
+		}
+		return out;
+	};
+	// lay rotated strips along a segment, only where the outside is open
+	auto stripsAlong = [&](Seg const& sg, float thick, bool varyDepth, std::string const& color, std::vector<DraftSpec>& out) {
+		float dx = sg.x1 - sg.x0, dy = sg.y1 - sg.y0;
+		float len = std::sqrt(dx * dx + dy * dy);
+		int cnt = std::max(1, (int)std::ceil(len / 0.9f));
+		float ang = -std::atan2(dy, dx) * 57.29578f; // clockwise degrees
+		if (ang < -90.f) ang += 180.f;
+		if (ang > 90.f) ang -= 180.f;
+		for (int q = 0; q < cnt; q++) {
+			float tpos = (q + 0.5f) / cnt;
+			float mx = sg.x0 + dx * tpos, my = sg.y0 + dy * tpos;
+			if (occ(mx + sg.nx * 0.12f, my + sg.ny * 0.12f)) continue; // covered by something else
+			float th = thick;
+			if (varyDepth) th = thick * (0.6f + 0.9f * vnoise(mx * 0.8f, my * 0.8f + 11.f, seed + 5));
+			float cxp = mx - sg.nx * (th / 2 - 0.04f), cyp = my - sg.ny * (th / 2 - 0.04f);
+			out.push_back(mk(cxp, cyp, ang, len / cnt * 1.12f + 0.02f, th, color));
+		}
+	};
+
+	// ---- 3) edge crust along exposed upward-facing surfaces (blocks and slope diagonals)
 	auto genEdge = [&]() {
 		std::vector<DraftSpec> out;
 		if (edgeStyle == "none") return out;
 		std::mt19937 g(seed + 1);
 		bool drips = edgeStyle == "moss" || edgeStyle == "slime" || edgeStyle == "lava";
 		for (int j = 0; j < m_rows; j++) for (int i = 0; i < m_cols; i++) {
-			if (!occ(i + 0.5f, j + 0.5f) || occ(i + 0.5f, j + 1.5f)) continue;
+			if (rows[j][i] != '#' || occ(i + 0.5f, j + 1.08f)) continue;
 			float n = vnoise(i * 0.8f, 7.f, seed + 5);
 			float depth = edgeDepth * (0.6f + 0.9f * n);
 			out.push_back(mk(i + 0.5f, j + 1.f - depth / 2 + 0.04f, 0.f, 1.03f, depth, edgeColor));
@@ -592,6 +691,9 @@ std::vector<DraftSpec> ArtAgentPopup::generateDraft(matjson::Value v) {
 					frand(g, 0.14f, 0.26f), len, edgeColor));
 			}
 		}
+		for (auto const& t : m_tris)
+			for (auto const& sg : segsOf(t))
+				if (sg.ny > 0.3f) stripsAlong(sg, edgeDepth, true, edgeColor, out);
 		return out;
 	};
 
@@ -600,8 +702,9 @@ std::vector<DraftSpec> ArtAgentPopup::generateDraft(matjson::Value v) {
 		std::vector<DraftSpec> out;
 		if (accDens <= 0.f) return out;
 		std::mt19937 g(seed + 2);
-		int occupied = 0;
-		for (int j = 0; j < m_rows; j++) for (int i = 0; i < m_cols; i++) if (rows[j][i] == '#') occupied++;
+		float occupied = 0.f;
+		for (int j = 0; j < m_rows; j++) for (int i = 0; i < m_cols; i++) if (rows[j][i] == '#') occupied += 1.f;
+		for (auto const& t : m_tris) occupied += 0.5f * std::abs(t.ax - t.px) * std::abs(t.by - t.py);
 		int n = (int)(occupied * accDens);
 		for (int tries = 0; tries < n * 8 && (int)out.size() < n; tries++) {
 			float x = frand(g, 0.f, (float)m_cols), y = frand(g, 0.f, (float)m_rows);
@@ -618,18 +721,23 @@ std::vector<DraftSpec> ArtAgentPopup::generateDraft(matjson::Value v) {
 		return out;
 	};
 
-	// ---- 5) crisp outline around the exposed silhouette
+	// ---- 5) crisp outline around the exposed silhouette (including slope diagonals)
 	auto genOutline = [&]() {
 		std::vector<DraftSpec> out;
 		float th = 0.1f;
 		for (int j = 0; j < m_rows; j++) for (int i = 0; i < m_cols; i++) {
 			if (rows[j][i] != '#') continue;
-			if (!occ(i - 0.5f, j + 0.5f)) out.push_back(mk(i + th / 2, j + 0.5f, 0.f, th, 1.f, mortar));
-			if (!occ(i + 1.5f, j + 0.5f)) out.push_back(mk(i + 1.f - th / 2, j + 0.5f, 0.f, th, 1.f, mortar));
-			if (!occ(i + 0.5f, j - 0.5f)) out.push_back(mk(i + 0.5f, j + th / 2, 0.f, 1.f, th, mortar));
-			if (edgeStyle == "none" && !occ(i + 0.5f, j + 1.5f))
+			if (!occ(i - 0.1f, j + 0.5f)) out.push_back(mk(i + th / 2, j + 0.5f, 0.f, th, 1.f, mortar));
+			if (!occ(i + 1.1f, j + 0.5f)) out.push_back(mk(i + 1.f - th / 2, j + 0.5f, 0.f, th, 1.f, mortar));
+			if (!occ(i + 0.5f, j - 0.1f)) out.push_back(mk(i + 0.5f, j + th / 2, 0.f, 1.f, th, mortar));
+			if (edgeStyle == "none" && !occ(i + 0.5f, j + 1.1f))
 				out.push_back(mk(i + 0.5f, j + 1.f - th / 2, 0.f, 1.f, th, mortar));
 		}
+		for (auto const& t : m_tris)
+			for (auto const& sg : segsOf(t)) {
+				if (edgeStyle != "none" && sg.ny > 0.3f) continue; // crust already covers upward-facing edges
+				stripsAlong(sg, th, false, mortar, out);
+			}
 		return out;
 	};
 
@@ -675,6 +783,16 @@ void ArtAgentPopup::clearDraft() {
 	auto lel = m_ui->m_editorLayer;
 	for (auto& o : m_draft) lel->removeObject(o, true);
 	m_draft.clear();
+	// give the original slopes their previous color back
+	if (!m_recolored.empty()) {
+		auto arr = CCArray::create();
+		for (auto& [so, oldId] : m_recolored) {
+			GameObject* o = so;
+			if (o->m_baseColor) { o->m_baseColor->m_colorID = oldId; arr->addObject(o); }
+		}
+		lel->updateObjectColors(arr);
+		m_recolored.clear();
+	}
 }
 
 void ArtAgentPopup::spawnDraft(std::vector<DraftSpec> const& specs) {
@@ -687,8 +805,45 @@ void ArtAgentPopup::spawnDraft(std::vector<DraftSpec> const& specs) {
 	int base = (int)Mod::get()->getSettingValue<int64_t>("color-channel-start");
 	int layer = (int)Mod::get()->getSettingValue<int64_t>("editor-layer");
 	std::map<std::string, int> channels;
-	std::map<std::string, ccColor3B> colorOf;
+	std::map<int, ccColor3B> chanColor;
 	auto fresh = CCArray::create();
+
+	// one color channel per distinct color (max 8); returns -1 if none could be made
+	auto chanFor = [&](std::string const& color) -> int {
+		auto it = channels.find(color);
+		if (it != channels.end()) return it->second;
+		if (channels.size() >= 8) return channels.empty() ? -1 : channels.begin()->second; // reuse one
+		int ch = base + (int)channels.size();
+		auto c = cc3bFromHexString(color).unwrapOr(ccc3(255, 255, 255));
+		// Write the channel to BOTH managers: the level settings one is what gets saved and
+		// what playtest loads; the live one is what the editor is drawing right now.
+		for (auto m : mgrs) {
+			auto action = m->getColorAction(ch);
+			if (!action) continue;
+			action->m_colorID = ch;
+			action->m_color = c;
+			action->m_fromColor = c;
+			action->m_toColor = c;
+			action->m_duration = 0.f;
+			action->m_deltaTime = 0.f;
+			action->m_blending = false;
+			action->m_playerColor = -1; // no player color
+			action->m_copyID = 0;
+			m->colorActionChanged(action);
+		}
+		channels[color] = ch;
+		chanColor[ch] = c;
+		return ch;
+	};
+	auto tint = [&](GameObject* obj, int ch) {
+		if (ch < 0) return;
+		if (obj->m_baseColor) {
+			obj->m_baseColor->m_colorID = ch;
+			obj->m_baseColor->m_usesHSV = false;
+		}
+		// direct tint too, so the preview is coloured even before the channel refresh lands
+		obj->setObjectColor(chanColor[ch]);
+	};
 
 	for (auto const& s : specs) {
 		auto pos = ccp(m_origin.x + s.x * B, m_origin.y + s.y * B);
@@ -699,43 +854,25 @@ void ArtAgentPopup::spawnDraft(std::vector<DraftSpec> const& specs) {
 		obj->updateCustomScaleY(s.sy);
 		if (s.front) obj->m_zLayer = ZLayer::T1;
 		obj->m_editorLayer = (short)layer;
-
-		// one color channel per distinct color (max 8)
-		auto it = channels.find(s.color);
-		if (it == channels.end() && channels.size() < 8) {
-			int ch = base + (int)channels.size();
-			auto c = cc3bFromHexString(s.color).unwrapOr(ccc3(255, 255, 255));
-			// Write the channel to BOTH managers: the level settings one is what gets saved and
-			// what playtest loads; the live one is what the editor is drawing right now.
-			for (auto m : mgrs) {
-				auto action = m->getColorAction(ch);
-				if (!action) continue;
-				action->m_colorID = ch;
-				action->m_color = c;
-				action->m_fromColor = c;
-				action->m_toColor = c;
-				action->m_duration = 0.f;
-				action->m_deltaTime = 0.f;
-				action->m_blending = false;
-				action->m_playerColor = -1; // no player color
-				action->m_copyID = 0;
-				m->colorActionChanged(action);
-			}
-			it = channels.emplace(s.color, ch).first;
-			colorOf[s.color] = c;
-		}
-		if (it == channels.end() && !channels.empty()) it = channels.begin(); // out of channels: reuse one
-		if (it != channels.end()) {
-			if (obj->m_baseColor) {
-				obj->m_baseColor->m_colorID = it->second;
-				obj->m_baseColor->m_usesHSV = false;
-			}
-			// direct tint too, so the preview is coloured even before the channel refresh lands
-			obj->setObjectColor(colorOf[it->first]);
-		}
-
+		tint(obj, chanFor(s.color));
 		fresh->addObject(obj);
 		m_draft.push_back(obj);
+	}
+
+	// Original slopes: tint them with the mortar color so they act as the mortar backing under the bricks.
+	if (Mod::get()->getSettingValue<bool>("recolor-slopes") && !m_slopeObjs.empty() && !m_mortarHex.empty()) {
+		int mch = chanFor(m_mortarHex);
+		if (mch >= 0) {
+			for (auto& so : m_slopeObjs) {
+				GameObject* o = so;
+				if (!o->m_baseColor) continue;
+				bool known = false;
+				for (auto& r : m_recolored) if (r.first == so) known = true;
+				if (!known) m_recolored.push_back({so, o->m_baseColor->m_colorID});
+				tint(o, mch);
+				fresh->addObject(o);
+			}
+		}
 	}
 
 	// make the editor recompute channel colors and redraw the new objects

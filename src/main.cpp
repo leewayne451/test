@@ -31,10 +31,18 @@ class $modify(ArtAgentEditorUI, EditorUI) {
 			FLAlertLayer::create("Art Agent", "Select the blocks you want to decorate first.", "OK")->show();
 			return;
 		}
-		std::vector<CCRect> rects;
+		std::vector<CCRect> rects, hazards;
+		std::vector<Ref<GameObject>> slopes;
 		for (auto obj : CCArrayExt<GameObject*>(sel)) {
-			rects.push_back(obj->getObjectRect());
+			// spikes / saws are left untouched; slopes are tiled as triangles; everything else as full blocks
+			if (obj->m_objectType == GameObjectType::Hazard) hazards.push_back(obj->getObjectRect());
+			else if (obj->m_objectType == GameObjectType::Slope) slopes.push_back(obj);
+			else rects.push_back(obj->getObjectRect());
 		}
-		ArtAgentPopup::create(this, rects)->show();
+		if (rects.empty() && slopes.empty()) {
+			FLAlertLayer::create("Art Agent", "Select at least one solid block or slope to decorate (hazards alone can't be tiled).", "OK")->show();
+			return;
+		}
+		ArtAgentPopup::create(this, rects, hazards, slopes)->show();
 	}
 };

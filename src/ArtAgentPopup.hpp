@@ -12,6 +12,12 @@ struct DraftSpec {
 	bool front = true;
 };
 
+// A slope as a right triangle in grid units: right-angle vertex P, horizontal leg end A, vertical leg end B.
+struct SlopeTri {
+	float px, py, ax, ay, bx, by;
+	bool rising; // hypotenuse rises to the right
+};
+
 class ArtAgentPopup : public Popup {
 protected:
 	EditorUI* m_ui = nullptr;
@@ -19,6 +25,10 @@ protected:
 	int m_cols = 0, m_rows = 0;
 	std::string m_grid;
 	bool m_tooBig = false;
+	std::vector<SlopeTri> m_tris;
+	std::vector<Ref<GameObject>> m_slopeObjs;
+	std::vector<std::pair<Ref<GameObject>, int>> m_recolored; // original slope + its previous color channel
+	std::string m_mortarHex;
 	bool m_busy = false;
 	bool m_overhang = false;
 	int m_variant = 0;
@@ -32,8 +42,8 @@ protected:
 	std::vector<Ref<GameObject>> m_draft;
 	async::TaskHolder<web::WebResponse> m_task;
 
-	bool init(EditorUI* ui, std::vector<CCRect> const& rects);
-	void buildGrid(std::vector<CCRect> const& rects);
+	bool init(EditorUI* ui, std::vector<CCRect> const& rects, std::vector<CCRect> const& hazards, std::vector<Ref<GameObject>> const& slopes);
+	void buildGrid(std::vector<CCRect> const& rects, std::vector<CCRect> const& hazards, std::vector<Ref<GameObject>> const& slopes);
 	int limit();
 	void say(std::string const& text);
 	void setCount();
@@ -52,5 +62,5 @@ protected:
 	void spawnDraft(std::vector<DraftSpec> const& specs);
 
 public:
-	static ArtAgentPopup* create(EditorUI* ui, std::vector<CCRect> const& rects);
+	static ArtAgentPopup* create(EditorUI* ui, std::vector<CCRect> const& rects, std::vector<CCRect> const& hazards, std::vector<Ref<GameObject>> const& slopes);
 };
