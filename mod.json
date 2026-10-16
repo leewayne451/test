@@ -22,8 +22,9 @@
 		"model": {
 			"type": "string",
 			"name": "Gemini model",
-			"description": "Any Gemini model id that supports generateContent, e.g. gemini-2.5-flash.",
-			"default": "gemini-2.5-flash"
+			"description": "Any Gemini model id that supports generateContent, e.g. gemini-3.1-flash-lite. If a character won't type, put the model id in model.txt inside the mod's save folder instead.",
+			"default": "gemini-2.5-flash",
+			"filter": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-:/"
 		},
 		"object-limit": {
 			"type": "int",
@@ -32,6 +33,15 @@
 			"default": 500,
 			"min": 10,
 			"max": 2000,
+			"control": { "input": true, "slider": false }
+		},
+		"editor-layer": {
+			"type": "int",
+			"name": "Editor layer",
+			"description": "Editor layer the decoration is placed on (e.g. 5). Objects on a layer are hidden when you view a different layer.",
+			"default": 5,
+			"min": 0,
+			"max": 999,
 			"control": { "input": true, "slider": false }
 		},
 		"color-channel-start": {

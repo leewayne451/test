@@ -256,8 +256,22 @@ void ArtAgentPopup::request(std::string userMsg) {
 		})},
 	});
 
-	auto url = fmt::format("https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent",
-		Mod::get()->getSettingValue<std::string>("model"));
+	// model id: setting, overridden by model.txt in the mod's save dir if present
+	std::string model = Mod::get()->getSettingValue<std::string>("model");
+	{
+		auto path = Mod::get()->getSaveDir() / "model.txt";
+		if (auto r = geode::utils::file::readString(path); r.isOk() && !r.unwrap().empty()) {
+			model = r.unwrap();
+		}
+		auto bad = [](unsigned char c) { return std::isspace(c) || c == '"' || c == '\''; };
+		while (!model.empty() && bad(model.back())) model.pop_back();
+		size_t i = 0;
+		while (i < model.size() && bad(model[i])) i++;
+		model = model.substr(i);
+		if (model.rfind("models/", 0) == 0) model = model.substr(7);
+		if (model.empty()) model = "gemini-2.5-flash";
+	}
+	auto url = fmt::format("https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent", model);
 
 	m_busy = true;
 	this->say("Thinking...");
@@ -570,8 +584,12 @@ void ArtAgentPopup::clearDraft() {
 
 void ArtAgentPopup::spawnDraft(std::vector<DraftSpec> const& specs) {
 	auto lel = m_ui->m_editorLayer;
+	auto em = lel->m_effectManager;
 	int base = (int)Mod::get()->getSettingValue<int64_t>("color-channel-start");
+	int layer = (int)Mod::get()->getSettingValue<int64_t>("editor-layer");
 	std::map<std::string, int> channels;
+	std::map<std::string, ccColor3B> colorOf;
+	auto fresh = CCArray::create();
 
 	for (auto const& s : specs) {
 		auto pos = ccp(m_origin.x + s.x * B, m_origin.y + s.y * B);
@@ -581,17 +599,38 @@ void ArtAgentPopup::spawnDraft(std::vector<DraftSpec> const& specs) {
 		obj->updateCustomScaleX(s.sx);
 		obj->updateCustomScaleY(s.sy);
 		if (s.front) obj->m_zLayer = ZLayer::T1;
+		obj->m_editorLayer = (short)layer;
 
 		// one color channel per distinct color (max 8)
 		auto it = channels.find(s.color);
 		if (it == channels.end() && channels.size() < 8) {
 			int ch = base + (int)channels.size();
 			auto c = cc3bFromHexString(s.color).unwrapOr(ccc3(255, 255, 255));
-			lel->m_effectManager->getColorAction(ch)->m_color = c; // may need extra refresh calls
+			auto action = em->getColorAction(ch);
+			action->m_color = c;
+			action->m_fromColor = c;
+			action->m_toColor = c;
+			action->m_duration = 0.f;
+			action->m_deltaTime = 0.f;
+			em->colorActionChanged(action);
 			it = channels.emplace(s.color, ch).first;
+			colorOf[s.color] = c;
 		}
-		if (it != channels.end() && obj->m_baseColor) obj->m_baseColor->m_colorID = it->second;
+		if (it == channels.end() && !channels.empty()) it = channels.begin(); // out of channels: reuse one
+		if (it != channels.end()) {
+			if (obj->m_baseColor) {
+				obj->m_baseColor->m_colorID = it->second;
+				obj->m_baseColor->m_usesHSV = false;
+			}
+			// direct tint too, so the preview is coloured even before the channel refresh lands
+			obj->setObjectColor(colorOf[it->first]);
+		}
 
+		fresh->addObject(obj);
 		m_draft.push_back(obj);
 	}
+
+	// make the editor recompute channel colors and redraw the new objects
+	em->calculateBaseActiveColors();
+	lel->updateObjectColors(fresh);
 }
