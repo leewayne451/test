@@ -1,3 +1,4 @@
+#include <cmath>
 #include <cctype>
 #include <Geode/utils/file.hpp>
 #include "ArtAgentPopup.hpp"
@@ -135,28 +136,32 @@ void ArtAgentPopup::setCount() {
 static std::string systemPrompt() {
 	return
 		"You are the art director inside Geometry Dash's level editor. The player selected a structure made of blocks "
-		"and describes how it should look (stone wall, wood, ice, moss...). You do NOT place objects. You choose a "
-		"visual STYLE, and the mod itself tiles it precisely over the structure's silhouette.\n\n"
+		"and describes how it should look (stone wall, wood, ice, hell...). You do NOT place objects. You choose a "
+		"visual STYLE, and the mod itself tiles it precisely over the structure's silhouette, adds a mortar backing, "
+		"bevel highlights/shadows and an outline.\n\n"
 		"Reply with ONLY one JSON object, no prose, no code fences:\n"
 		"{\"summary\":\"1-2 short sentences\","
 		"\"pattern\":\"bricks|stones|tiles|planks\","
-		"\"brick_w\":1.0,\"brick_h\":0.5,\"gap\":0.06,"
-		"\"rotation_jitter\":2,\"size_jitter\":0.1,"
-		"\"colors\":[\"#6B6B6B\",\"#7E7E7E\",\"#909090\",\"#5A5A5A\"],"
-		"\"edge\":{\"style\":\"none|moss|grass|snow|slime\",\"color\":\"#4F7A2E\",\"depth\":0.25},"
-		"\"accent\":{\"type\":\"spots|cracks\",\"color\":\"#3E3E3E\",\"density\":0.05}}\n\n"
+		"\"brick_w\":1.0,\"brick_h\":0.5,\"gap\":0.05,"
+		"\"rotation_jitter\":1,\"size_jitter\":0.1,"
+		"\"colors\":[\"#2B1414\",\"#3A1A1A\",\"#4A2222\",\"#5C2A26\"],"
+		"\"mortar\":\"#0D0606\","
+		"\"edge\":{\"style\":\"none|moss|grass|snow|slime|lava\",\"color\":\"#FF5A14\",\"depth\":0.25},"
+		"\"accent\":{\"type\":\"spots|cracks\",\"color\":\"#FF7A1A\",\"density\":0.05}}\n\n"
 		"Field meanings (sizes are in blocks, 1 block = 1 grid square):\n"
 		"- pattern: bricks = running-bond rows; stones = irregular rows of uneven stones; tiles = aligned grid; planks = long horizontal boards.\n"
-		"- brick_w / brick_h: size of one piece (0.25 to 4). gap: dark seam between pieces (0 to 0.3) that shows the original block through. "
-		"The mod enlarges pieces automatically if the object limit would be exceeded, so do not worry about counts.\n"
-		"- rotation_jitter: max random tilt in degrees (0 to 15). size_jitter: random size variation (0 to 0.4).\n"
-		"- colors: 3 to 5 shades of the MAIN material, pieces pick randomly among them. Use close shades (slightly lighter/darker) for a natural look.\n"
-		"- edge: decoration growing on the TOP surfaces. moss/grass = green, snow = white, slime = drips. depth 0.1 to 0.6.\n"
-		"- accent: scattered detail. spots = small speckles, cracks = thin dark slashes. density 0 to 0.3 (fraction of cells).\n\n"
-		"Style hints: stone castle: stones or bricks 1x0.5, gap 0.06, greys, cracks, moss edge. Wood: planks 3x0.5, gap 0.03, "
-		"rotation_jitter 0, browns. Ice: tiles 1x1, gap 0.02, pale blues, white spots, snow edge. Sand/desert: stones, warm yellows. "
-		"Lava rock: stones, dark reds/blacks, orange spots. Total distinct colors must stay at or below 7 "
-		"(colors + edge + accent).\n"
+		"- brick_w / brick_h: size of one piece (0.25 to 4). gap: seam between pieces (0 to 0.3) showing the mortar.\n"
+		"- rotation_jitter: max random tilt in degrees; keep it SMALL (0 to 2), large values look sloppy. size_jitter: 0 to 0.3.\n"
+		"- colors: 3 or 4 shades of the MAIN material ordered DARKEST to LIGHTEST, close to each other. The mod darkens low areas "
+		"and lightens high areas, and clusters shades into natural patches. Make them clearly distinct, but not wildly different.\n"
+		"- mortar: very dark color for seams, backing and outline (darker than the darkest shade).\n"
+		"- edge: decoration on TOP surfaces. moss/grass = green, snow = white, slime/lava = dripping. depth 0.1 to 0.5. "
+		"For hell use lava with a bright orange color.\n"
+		"- accent: scattered detail. spots = small speckles, cracks = thin slashes. density 0 to 0.3. A glowing accent color "
+		"(orange for hell, cyan for ice) makes the design pop.\n\n"
+		"Style hints: stone castle: stones 1x0.5, greys, moss edge, dark cracks. Wood: planks 3x0.5, gap 0.03, rotation_jitter 0, browns. "
+		"Ice: tiles 1x1, pale blues, white spots, snow edge. Hell: bricks 1x0.5, very dark reds/blacks, lava edge, orange cracks. "
+		"Use at most 4 colors in 'colors'.\n"
 		"If the user asks for changes, return the COMPLETE updated style object.";
 }
 
@@ -376,6 +381,29 @@ static float frand(std::mt19937& g, float a, float b) {
 	return std::uniform_real_distribution<float>(a, b)(g);
 }
 
+static float hash2(int x, int y, unsigned sd) {
+	unsigned h = (unsigned)x * 374761393u + (unsigned)y * 668265263u + sd * 2246822519u;
+	h = (h ^ (h >> 13)) * 1274126177u;
+	h ^= h >> 16;
+	return (float)(h & 0xFFFFFF) / 16777215.f;
+}
+
+// smooth value noise in [0,1]: neighbouring pieces get related values, so colors form patches
+static float vnoise(float x, float y, unsigned sd) {
+	int xi = (int)std::floor(x), yi = (int)std::floor(y);
+	float fx = x - xi, fy = y - yi;
+	fx = fx * fx * (3.f - 2.f * fx);
+	fy = fy * fy * (3.f - 2.f * fy);
+	float a = hash2(xi, yi, sd), b = hash2(xi + 1, yi, sd);
+	float c = hash2(xi, yi + 1, sd), d = hash2(xi + 1, yi + 1, sd);
+	float top = c + (d - c) * fx, bot = a + (b - a) * fx;
+	return bot + (top - bot) * fy;
+}
+
+static std::string hexOf(ccColor3B c) {
+	return fmt::format("#{:02X}{:02X}{:02X}", (int)c.r, (int)c.g, (int)c.b);
+}
+
 // Deterministic, silhouette-aware tiling. The model only supplies the style.
 std::vector<DraftSpec> ArtAgentPopup::generateDraft(matjson::Value v) {
 	// occupancy grid (rows[j][i], j = 0 is the bottom row)
@@ -406,26 +434,45 @@ std::vector<DraftSpec> ArtAgentPopup::generateDraft(matjson::Value v) {
 		if (c[0] != '#') c = "#" + c;
 		return c;
 	};
+	auto parse = [](std::string const& c) { return cc3bFromHexString(c).unwrapOr(ccc3(136, 136, 136)); };
 
 	std::string pattern = str(v, "pattern", "bricks");
 	float bw = (float)std::clamp(dbl(v, "brick_w", 1.0), 0.25, 4.0);
 	float bh = (float)std::clamp(dbl(v, "brick_h", 0.5), 0.25, 4.0);
-	float gap = (float)std::clamp(dbl(v, "gap", 0.06), 0.0, 0.3);
-	float rotJ = (float)std::clamp(dbl(v, "rotation_jitter", 2.0), 0.0, 15.0);
-	float sizeJ = (float)std::clamp(dbl(v, "size_jitter", 0.1), 0.0, 0.4);
+	float gap = (float)std::clamp(dbl(v, "gap", 0.05), 0.0, 0.3);
+	float rotJ = (float)std::clamp(dbl(v, "rotation_jitter", 1.0), 0.0, 3.0); // large tilts look sloppy
+	float sizeJ = (float)std::clamp(dbl(v, "size_jitter", 0.1), 0.0, 0.3);
 
 	std::vector<std::string> base;
 	for (auto& c : arrOf(v["colors"])) {
 		auto cs = c.asString().unwrapOr("");
-		if (!cs.empty() && base.size() < 5) base.push_back(hex(cs, "#888888"));
+		if (!cs.empty() && base.size() < 4) base.push_back(hex(cs, "#888888"));
 	}
-	if (base.empty()) base = {"#8A8A8A", "#7A7A7A", "#9A9A9A"};
+	if (base.empty()) base = {"#3A3A3A", "#4A4A4A", "#5A5A5A"};
+
+	// mortar (seams, backing, outline): from the model or a darkened version of the darkest shade
+	std::string mortar;
+	{
+		auto given = str(v, "mortar", "");
+		if (!given.empty()) mortar = hex(given, "#111111");
+		else {
+			auto d = parse(base[0]);
+			mortar = hexOf(ccc3((GLubyte)(d.r * 0.4f), (GLubyte)(d.g * 0.4f), (GLubyte)(d.b * 0.4f)));
+		}
+	}
+	// bevel highlight: a lighter tint of the lightest shade
+	std::string hl;
+	{
+		auto l = parse(base.back());
+		auto lift = [](GLubyte c) { return (GLubyte)std::min(255.f, c + (255.f - c) * 0.35f); };
+		hl = hexOf(ccc3(lift(l.r), lift(l.g), lift(l.b)));
+	}
 
 	auto edgeV = v["edge"];
 	auto accV = v["accent"];
 	std::string edgeStyle = str(edgeV, "style", "none");
 	std::string edgeColor = hex(str(edgeV, "color", "#4F7A2E"), "#4F7A2E");
-	float edgeDepth = (float)std::clamp(dbl(edgeV, "depth", 0.25), 0.1, 0.6);
+	float edgeDepth = (float)std::clamp(dbl(edgeV, "depth", 0.25), 0.1, 0.5);
 	std::string accType = str(accV, "type", "spots");
 	std::string accColor = hex(str(accV, "color", "#3E3E3E"), "#3E3E3E");
 	float accDens = (float)std::clamp(dbl(accV, "density", 0.0), 0.0, 0.3);
@@ -444,16 +491,32 @@ std::vector<DraftSpec> ArtAgentPopup::generateDraft(matjson::Value v) {
 		return s;
 	};
 
-	// ---- main surface pieces
-	auto genBricks = [&](float k) {
+	// ---- 1) mortar backing: hides the original blocks, so seams read as dark mortar (merged per row)
+	auto genBacking = [&]() {
+		std::vector<DraftSpec> out;
+		for (int j = 0; j < m_rows; j++) {
+			int i = 0;
+			while (i < m_cols) {
+				if (rows[j][i] != '#') { i++; continue; }
+				int st = i;
+				while (i < m_cols && rows[j][i] == '#') i++;
+				out.push_back(mk(st + (i - st) / 2.f, j + 0.5f, 0.f, (i - st) + 0.04f, 1.04f, mortar));
+			}
+		}
+		return out;
+	};
+
+	// ---- 2) main surface pieces with bevel
+	auto genBricks = [&](float k, bool bevel) {
 		std::vector<DraftSpec> out;
 		std::mt19937 g(seed);
 		float w = bw * k, h = bh * k;
 		bool stagger = pattern != "tiles";
-		float irr = pattern == "stones" ? 0.35f : 0.f;
+		float irr = pattern == "stones" ? 0.3f : 0.f;
 		float e = 0.05f;
 		float y = 0.f;
 		int r = 0;
+		int N = (int)base.size();
 		while (y < (float)m_rows - 0.05f) {
 			float rh = h * (irr > 0 ? frand(g, 1.f - irr, 1.f + irr) : 1.f);
 			float x = stagger ? (irr > 0 ? -frand(g, 0.f, w) : ((r % 2) ? -w * 0.5f : 0.f)) : 0.f;
@@ -474,11 +537,23 @@ std::vector<DraftSpec> ArtAgentPopup::generateDraft(matjson::Value v) {
 						&& occ((L + R) / 2, (B2 + T) / 2);
 				};
 				auto place = [&](float px, float py, float pwid, float phei) {
-					float jx = 1.f + frand(g, -sizeJ, sizeJ) * 0.5f;
-					float jy = 1.f + frand(g, -sizeJ, sizeJ) * 0.5f;
-					int ci = (int)(frand(g, 0.f, 0.9999f) * base.size());
-					out.push_back(mk(px, py, frand(g, -rotJ, rotJ),
-						(pwid - gap) * jx, (phei - gap) * jy, base[ci]));
+					// pieces only ever shrink, so neighbours never overlap
+					float fw = std::max(0.12f, (pwid - gap) * (1.f - frand(g, 0.f, sizeJ) * 0.5f));
+					float fh = std::max(0.12f, (phei - gap) * (1.f - frand(g, 0.f, sizeJ) * 0.5f));
+					float rot = frand(g, -rotJ, rotJ);
+					// color: smooth patches + lighter toward the top + a little randomness
+					float n = vnoise(px / 2.5f, py / 2.5f, seed);
+					n = std::clamp(0.5f + (n - 0.5f) * 1.5f, 0.f, 1.f);
+					float yf = m_rows > 0 ? py / (float)m_rows : 0.5f;
+					float tt = n * 0.55f + yf * 0.2f + frand(g, 0.f, 0.25f);
+					int ci = std::clamp((int)(tt * N), 0, N - 1);
+					out.push_back(mk(px, py, rot, fw, fh, base[ci]));
+					if (bevel && fw > 0.45f && fh > 0.28f) {
+						float sr = std::sin(rot * 0.0174533f), cr = std::cos(rot * 0.0174533f);
+						float d = fh / 2 - 0.045f;
+						out.push_back(mk(px + d * sr, py + d * cr, rot, fw * 0.94f, 0.07f, hl));
+						out.push_back(mk(px - d * sr, py - d * cr, rot, fw * 0.94f, 0.07f, mortar));
+					}
 				};
 
 				if (m_overhang) {
@@ -500,32 +575,27 @@ std::vector<DraftSpec> ArtAgentPopup::generateDraft(matjson::Value v) {
 		return out;
 	};
 
-	// ---- edge decoration on exposed top surfaces
+	// ---- 3) edge crust along exposed top surfaces (continuous, follows the silhouette)
 	auto genEdge = [&]() {
 		std::vector<DraftSpec> out;
 		if (edgeStyle == "none") return out;
 		std::mt19937 g(seed + 1);
-		bool drips = edgeStyle == "moss" || edgeStyle == "slime";
-		int pieces = edgeStyle == "grass" ? 4 : 2;
+		bool drips = edgeStyle == "moss" || edgeStyle == "slime" || edgeStyle == "lava";
 		for (int j = 0; j < m_rows; j++) for (int i = 0; i < m_cols; i++) {
 			if (!occ(i + 0.5f, j + 0.5f) || occ(i + 0.5f, j + 1.5f)) continue;
-			for (int p = 0; p < pieces; p++) {
-				float depth = edgeDepth * frand(g, 0.7f, 1.4f);
-				float width = (1.f / pieces) * frand(g, 1.0f, 1.5f);
-				float cx = i + (p + 0.5f) / pieces + frand(g, -0.08f, 0.08f);
-				float cy = j + 1.f - depth / 2 + 0.05f;
-				out.push_back(mk(cx, cy, frand(g, -4.f, 4.f), width, depth, edgeColor));
-			}
-			if (drips && frand(g, 0.f, 1.f) < 0.35f) {
-				float len = frand(g, 0.3f, 0.9f);
-				float cx = i + frand(g, 0.15f, 0.85f);
-				out.push_back(mk(cx, j + 1.f - edgeDepth - len / 2 + 0.05f, 0.f, frand(g, 0.15f, 0.3f), len, edgeColor));
+			float n = vnoise(i * 0.8f, 7.f, seed + 5);
+			float depth = edgeDepth * (0.6f + 0.9f * n);
+			out.push_back(mk(i + 0.5f, j + 1.f - depth / 2 + 0.04f, 0.f, 1.03f, depth, edgeColor));
+			if (drips && frand(g, 0.f, 1.f) < 0.3f) {
+				float len = frand(g, 0.25f, 0.8f);
+				out.push_back(mk(i + frand(g, 0.2f, 0.8f), j + 1.f - depth - len / 2 + 0.04f, 0.f,
+					frand(g, 0.14f, 0.26f), len, edgeColor));
 			}
 		}
 		return out;
 	};
 
-	// ---- scattered accents (speckles or cracks)
+	// ---- 4) scattered accents (speckles or cracks)
 	auto genAccent = [&]() {
 		std::vector<DraftSpec> out;
 		if (accDens <= 0.f) return out;
@@ -541,37 +611,62 @@ std::vector<DraftSpec> ArtAgentPopup::generateDraft(matjson::Value v) {
 				if (!occ(x - 0.3f, y) || !occ(x + 0.3f, y) || !occ(x, y - 0.3f) || !occ(x, y + 0.3f)) continue;
 				out.push_back(mk(x, y, frand(g, 0.f, 180.f), 0.07f, len, accColor));
 			} else {
-				float sz = frand(g, 0.12f, 0.35f);
+				float sz = frand(g, 0.12f, 0.3f);
 				out.push_back(mk(x, y, frand(g, 0.f, 45.f), sz, sz, accColor));
 			}
 		}
 		return out;
 	};
 
+	// ---- 5) crisp outline around the exposed silhouette
+	auto genOutline = [&]() {
+		std::vector<DraftSpec> out;
+		float th = 0.1f;
+		for (int j = 0; j < m_rows; j++) for (int i = 0; i < m_cols; i++) {
+			if (rows[j][i] != '#') continue;
+			if (!occ(i - 0.5f, j + 0.5f)) out.push_back(mk(i + th / 2, j + 0.5f, 0.f, th, 1.f, mortar));
+			if (!occ(i + 1.5f, j + 0.5f)) out.push_back(mk(i + 1.f - th / 2, j + 0.5f, 0.f, th, 1.f, mortar));
+			if (!occ(i + 0.5f, j - 0.5f)) out.push_back(mk(i + 0.5f, j + th / 2, 0.f, 1.f, th, mortar));
+			if (edgeStyle == "none" && !occ(i + 0.5f, j + 1.5f))
+				out.push_back(mk(i + 0.5f, j + 1.f - th / 2, 0.f, 1.f, th, mortar));
+		}
+		return out;
+	};
+
 	int L = limit();
+	auto backing = genBacking();
 	auto edge = genEdge();
 	auto acc = genAccent();
+	auto outline = genOutline();
 	std::mt19937 trim(seed + 3);
-	size_t edgeCap = (size_t)std::max(1, (int)(L * 0.35f)), accCap = (size_t)std::max(1, (int)(L * 0.15f));
+	size_t edgeCap = (size_t)std::max(1, (int)(L * 0.25f)), accCap = (size_t)std::max(1, (int)(L * 0.12f));
 	if (edge.size() > edgeCap) { std::shuffle(edge.begin(), edge.end(), trim); edge.resize(edgeCap); }
 	if (acc.size() > accCap) { std::shuffle(acc.begin(), acc.end(), trim); acc.resize(accCap); }
-	int reserve = (int)(edge.size() + acc.size());
+	if ((int)outline.size() > (int)(L * 0.2f)) outline.clear();
+	auto reserveOf = [&]() { return (int)(backing.size() + edge.size() + acc.size() + outline.size()); };
+	if (reserveOf() > (int)(L * 0.6f)) { outline.clear(); acc.clear(); }
+	if (reserveOf() > (int)(L * 0.6f)) backing.clear();
+	int reserve = reserveOf();
 
-	// enlarge pieces until everything fits in the object limit
-	float k = 1.f;
+	// Prefer bevelled pieces (3 objects each); if that needs oversized pieces, fall back to plain pieces.
 	std::vector<DraftSpec> bricks;
-	for (int it = 0; it < 40; it++) {
-		bricks = genBricks(k);
-		if ((int)bricks.size() + reserve <= L) break;
-		k *= 1.15f;
-		if (k > 20.f) break;
+	bool fitted = false;
+	for (float k = 1.f; k <= 1.6f && !fitted; k *= 1.08f) {
+		bricks = genBricks(k, true);
+		fitted = (int)bricks.size() + reserve <= L;
+	}
+	for (float k = 1.f; !fitted && k <= 20.f; k *= 1.12f) {
+		bricks = genBricks(k, false);
+		fitted = (int)bricks.size() + reserve <= L;
 	}
 	if ((int)bricks.size() + reserve > L) bricks.resize(std::max(0, L - reserve));
 
 	std::vector<DraftSpec> all;
-	all.reserve(bricks.size() + acc.size() + edge.size());
+	all.reserve(bricks.size() + reserve);
+	for (auto& s : backing) all.push_back(s); // order = draw order: backing first, edge last
 	for (auto& s : bricks) all.push_back(s);
 	for (auto& s : acc) all.push_back(s);
+	for (auto& s : outline) all.push_back(s);
 	for (auto& s : edge) all.push_back(s);
 	return all;
 }
