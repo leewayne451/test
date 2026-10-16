@@ -1,3 +1,4 @@
+#include <cstdlib>
 #include <cmath>
 #include <cctype>
 #include <Geode/utils/file.hpp>
@@ -530,10 +531,22 @@ std::vector<DraftSpec> ArtAgentPopup::generateDraft(matjson::Value v) {
 	auto accV = v["accent"];
 	std::string edgeStyle = str(edgeV, "style", "none");
 	std::string edgeColor = hex(str(edgeV, "color", "#4F7A2E"), "#4F7A2E");
-	float edgeDepth = (float)std::clamp(dbl(edgeV, "depth", 0.25), 0.1, 0.5);
+	float edgeDepth = (float)std::clamp(dbl(edgeV, "depth", 0.25), 0.1, 0.35);
 	std::string accType = str(accV, "type", "spots");
 	std::string accColor = hex(str(accV, "color", "#3E3E3E"), "#3E3E3E");
 	float accDens = (float)std::clamp(dbl(accV, "density", 0.0), 0.0, 0.3);
+
+	// transparent / additive channels ("#RRGGBB|a30|add" = 30% opacity, additive blending)
+	bool fx = Mod::get()->getSettingValue<bool>("glow");
+	std::string glowEdge = edgeColor + "|a30|add";
+	std::string glowAcc = accColor + "|a30|add";
+	bool glowy = fx && (edgeStyle == "lava" || edgeStyle == "slime");
+	bool accGlowy = false;
+	{
+		auto ac = parse(accColor);
+		accGlowy = fx && accType == "cracks" && (ac.r + ac.g + ac.b) / 765.f > 0.55f;
+	}
+	std::vector<DraftSpec> glowLayer, accGlowLayer;
 
 	unsigned seed = 1337u + 7919u * (unsigned)m_variant + 104729u * (unsigned)m_history.size()
 		+ (unsigned)(m_cols * 31 + m_rows);
@@ -561,11 +574,27 @@ std::vector<DraftSpec> ArtAgentPopup::generateDraft(matjson::Value v) {
 				out.push_back(mk(st + (i - st) / 2.f, j + 0.5f, 0.f, (i - st) + 0.04f, 1.04f, mortar));
 			}
 		}
+		// slopes: stacked horizontal slices (0.25 high) that approximate the triangle; the outline hides the steps
+		for (auto const& t : m_tris) {
+			float dx = t.ax - t.px, dy = t.by - t.py;
+			float w = std::abs(dx), h = std::abs(dy);
+			if (w < 0.05f || h < 0.05f) continue;
+			int n = std::max(1, (int)std::ceil(h / 0.25f));
+			float rh = h / n;
+			for (int q = 0; q < n; q++) {
+				float vfrac = (q + 0.5f) * rh / h;
+				float width = w * (1.f - vfrac);
+				if (width < 0.06f) continue;
+				float ymid = t.py + (dy > 0.f ? 1.f : -1.f) * (q + 0.5f) * rh;
+				float xmid = t.px + (dx > 0.f ? 1.f : -1.f) * width / 2;
+				out.push_back(mk(xmid, ymid, 0.f, width + 0.02f, rh + 0.02f, mortar));
+			}
+		}
 		return out;
 	};
 
 	// ---- 2) main surface pieces with bevel
-	auto genBricks = [&](float k, bool bevel) {
+	auto genBricks = [&](float k, int bevel) {
 		std::vector<DraftSpec> out;
 		std::mt19937 g(seed);
 		float w = bw * k, h = bh * k;
@@ -592,11 +621,17 @@ std::vector<DraftSpec> ArtAgentPopup::generateDraft(matjson::Value v) {
 			float tt = n * 0.55f + yf * 0.2f + frand(g, 0.f, 0.25f);
 			int ci = std::clamp((int)(tt * N), 0, N - 1);
 			out.push_back(mk(px, py, rot, fw, fh, base[ci]));
-			if (bevel && fw > 0.45f && fh > 0.28f) {
+			if (bevel >= 1 && fw > 0.45f && fh > 0.28f) {
 				float sr = std::sin(rot * 0.0174533f), cr = std::cos(rot * 0.0174533f);
 				float d = fh / 2 - 0.045f;
 				out.push_back(mk(px + d * sr, py + d * cr, rot, fw * 0.94f, 0.07f, hl));
 				out.push_back(mk(px - d * sr, py - d * cr, rot, fw * 0.94f, 0.07f, mortar));
+				if (bevel >= 2 && fw > 0.6f) {
+					// light from the top-left: highlight on the left edge, shadow on the right edge
+					float dxs = fw / 2 - 0.035f;
+					out.push_back(mk(px - dxs * cr, py + dxs * sr, rot, 0.06f, fh * 0.86f, hl));
+					out.push_back(mk(px + dxs * cr, py - dxs * sr, rot, 0.06f, fh * 0.86f, mortar));
+				}
 			}
 		};
 		// Fit a piece; if it pokes outside the shape (block edge or slope diagonal), split it
@@ -660,7 +695,7 @@ std::vector<DraftSpec> ArtAgentPopup::generateDraft(matjson::Value v) {
 	auto stripsAlong = [&](Seg const& sg, float thick, bool varyDepth, std::string const& color, std::vector<DraftSpec>& out) {
 		float dx = sg.x1 - sg.x0, dy = sg.y1 - sg.y0;
 		float len = std::sqrt(dx * dx + dy * dy);
-		int cnt = std::max(1, (int)std::ceil(len / 0.9f));
+		int cnt = std::max(1, (int)std::ceil(len / 0.5f));
 		float ang = -std::atan2(dy, dx) * 57.29578f; // clockwise degrees
 		if (ang < -90.f) ang += 180.f;
 		if (ang > 90.f) ang -= 180.f;
@@ -669,9 +704,9 @@ std::vector<DraftSpec> ArtAgentPopup::generateDraft(matjson::Value v) {
 			float mx = sg.x0 + dx * tpos, my = sg.y0 + dy * tpos;
 			if (occ(mx + sg.nx * 0.12f, my + sg.ny * 0.12f)) continue; // covered by something else
 			float th = thick;
-			if (varyDepth) th = thick * (0.6f + 0.9f * vnoise(mx * 0.8f, my * 0.8f + 11.f, seed + 5));
+			if (varyDepth) th = thick * (0.45f + 0.65f * vnoise(mx * 1.3f, my * 1.3f + 11.f, seed + 5));
 			float cxp = mx - sg.nx * (th / 2 - 0.04f), cyp = my - sg.ny * (th / 2 - 0.04f);
-			out.push_back(mk(cxp, cyp, ang, len / cnt * 1.12f + 0.02f, th, color));
+			out.push_back(mk(cxp, cyp, ang, len / cnt * 1.3f + 0.02f, th, color));
 		}
 	};
 
@@ -685,6 +720,7 @@ std::vector<DraftSpec> ArtAgentPopup::generateDraft(matjson::Value v) {
 			if (rows[j][i] != '#' || occ(i + 0.5f, j + 1.08f)) continue;
 			float n = vnoise(i * 0.8f, 7.f, seed + 5);
 			float depth = edgeDepth * (0.6f + 0.9f * n);
+			if (glowy) glowLayer.push_back(mk(i + 0.5f, j + 1.f - depth * 0.9f, 0.f, 1.02f, depth * 2.6f + 0.12f, glowEdge));
 			out.push_back(mk(i + 0.5f, j + 1.f - depth / 2 + 0.04f, 0.f, 1.03f, depth, edgeColor));
 			if (drips && frand(g, 0.f, 1.f) < 0.3f) {
 				float len = frand(g, 0.25f, 0.8f);
@@ -694,7 +730,10 @@ std::vector<DraftSpec> ArtAgentPopup::generateDraft(matjson::Value v) {
 		}
 		for (auto const& t : m_tris)
 			for (auto const& sg : segsOf(t))
-				if (sg.ny > 0.3f) stripsAlong(sg, edgeDepth, true, edgeColor, out);
+				if (sg.ny > 0.3f) {
+					if (glowy) stripsAlong(sg, edgeDepth * 2.4f, false, glowEdge, glowLayer);
+					stripsAlong(sg, edgeDepth, true, edgeColor, out);
+				}
 		return out;
 	};
 
@@ -713,10 +752,33 @@ std::vector<DraftSpec> ArtAgentPopup::generateDraft(matjson::Value v) {
 			if (accType == "cracks") {
 				float len = frand(g, 0.4f, 1.1f);
 				if (!occ(x - 0.3f, y) || !occ(x + 0.3f, y) || !occ(x, y - 0.3f) || !occ(x, y + 0.3f)) continue;
-				out.push_back(mk(x, y, frand(g, 0.f, 180.f), 0.07f, len, accColor));
+				float rotc = frand(g, 0.f, 180.f);
+				if (accGlowy) accGlowLayer.push_back(mk(x, y, rotc, 0.26f, len + 0.15f, glowAcc));
+				out.push_back(mk(x, y, rotc, 0.07f, len, accColor));
 			} else {
 				float sz = frand(g, 0.12f, 0.3f);
 				out.push_back(mk(x, y, frand(g, 0.f, 45.f), sz, sz, accColor));
+			}
+		}
+		return out;
+	};
+
+	// ---- 4b) vertical shading: darker toward the bottom (transparent black overlay on whole-cell rows)
+	auto genShade = [&]() {
+		std::vector<DraftSpec> out;
+		if (!fx || m_rows < 3) return out;
+		for (int j = 0; j < m_rows; j++) {
+			float f = (float)j / (float)(m_rows - 1);
+			std::string col;
+			if (f < 0.34f) col = "#000000|a40";
+			else if (f < 0.67f) col = "#000000|a20";
+			else continue;
+			int i = 0;
+			while (i < m_cols) {
+				if (rows[j][i] != '#') { i++; continue; }
+				int st = i;
+				while (i < m_cols && rows[j][i] == '#') i++;
+				out.push_back(mk(st + (i - st) / 2.f, j + 0.5f, 0.f, (float)(i - st), 1.f, col));
 			}
 		}
 		return out;
@@ -744,39 +806,53 @@ std::vector<DraftSpec> ArtAgentPopup::generateDraft(matjson::Value v) {
 
 	int L = limit();
 	auto backing = genBacking();
-	auto edge = genEdge();
-	auto acc = genAccent();
+	auto shade = genShade();
+	auto edge = genEdge();   // also fills glowLayer
+	auto acc = genAccent();  // also fills accGlowLayer
 	auto outline = genOutline();
+	std::vector<DraftSpec> glow = glowLayer;
+	glow.insert(glow.end(), accGlowLayer.begin(), accGlowLayer.end());
+
 	std::mt19937 trim(seed + 3);
 	size_t edgeCap = (size_t)std::max(1, (int)(L * 0.25f)), accCap = (size_t)std::max(1, (int)(L * 0.12f));
+	size_t glowCap = (size_t)std::max(1, (int)(L * 0.15f));
 	if (edge.size() > edgeCap) { std::shuffle(edge.begin(), edge.end(), trim); edge.resize(edgeCap); }
 	if (acc.size() > accCap) { std::shuffle(acc.begin(), acc.end(), trim); acc.resize(accCap); }
+	if (glow.size() > glowCap) { std::shuffle(glow.begin(), glow.end(), trim); glow.resize(glowCap); }
 	if ((int)outline.size() > (int)(L * 0.2f)) outline.clear();
-	auto reserveOf = [&]() { return (int)(backing.size() + edge.size() + acc.size() + outline.size()); };
-	if (reserveOf() > (int)(L * 0.6f)) { outline.clear(); acc.clear(); }
+	auto reserveOf = [&]() {
+		return (int)(backing.size() + shade.size() + glow.size() + edge.size() + acc.size() + outline.size());
+	};
+	if (reserveOf() > (int)(L * 0.6f)) { outline.clear(); acc.clear(); glow.clear(); shade.clear(); }
 	if (reserveOf() > (int)(L * 0.6f)) backing.clear();
 	int reserve = reserveOf();
 
-	// Prefer bevelled pieces (3 objects each); if that needs oversized pieces, fall back to plain pieces.
+	// Prefer richer bevels (level 2 = 5 objects per brick, level 1 = 3); fall back to plain pieces if too big.
 	std::vector<DraftSpec> bricks;
 	bool fitted = false;
-	for (float k = 1.f; k <= 1.6f && !fitted; k *= 1.08f) {
-		bricks = genBricks(k, true);
-		fitted = (int)bricks.size() + reserve <= L;
+	for (int lvl = 2; lvl >= 1 && !fitted; lvl--) {
+		float kmax = lvl == 2 ? 1.35f : 1.7f;
+		for (float k = 1.f; k <= kmax && !fitted; k *= 1.08f) {
+			bricks = genBricks(k, lvl);
+			fitted = (int)bricks.size() + reserve <= L;
+		}
 	}
 	for (float k = 1.f; !fitted && k <= 20.f; k *= 1.12f) {
-		bricks = genBricks(k, false);
+		bricks = genBricks(k, 0);
 		fitted = (int)bricks.size() + reserve <= L;
 	}
 	if ((int)bricks.size() + reserve > L) bricks.resize(std::max(0, L - reserve));
 
 	std::vector<DraftSpec> all;
 	all.reserve(bricks.size() + reserve);
-	for (auto& s : backing) all.push_back(s); // order = draw order: backing first, edge last
-	for (auto& s : bricks) all.push_back(s);
-	for (auto& s : acc) all.push_back(s);
-	for (auto& s : outline) all.push_back(s);
-	for (auto& s : edge) all.push_back(s);
+	// order = draw order: mortar, bricks, shading, glow, accents, outline, crust on top
+	for (auto& s2 : backing) all.push_back(s2);
+	for (auto& s2 : bricks) all.push_back(s2);
+	for (auto& s2 : shade) all.push_back(s2);
+	for (auto& s2 : glow) all.push_back(s2);
+	for (auto& s2 : acc) all.push_back(s2);
+	for (auto& s2 : outline) all.push_back(s2);
+	for (auto& s2 : edge) all.push_back(s2);
 	return all;
 }
 
@@ -807,15 +883,30 @@ void ArtAgentPopup::spawnDraft(std::vector<DraftSpec> const& specs) {
 	int layer = (int)Mod::get()->getSettingValue<int64_t>("editor-layer");
 	std::map<std::string, int> channels;
 	std::map<int, ccColor3B> chanColor;
+	std::map<int, float> chanOp;
+	std::vector<std::pair<GameObject*, float>> translucent;
 	auto fresh = CCArray::create();
 
 	// one color channel per distinct color (max 8); returns -1 if none could be made
 	auto chanFor = [&](std::string const& color) -> int {
 		auto it = channels.find(color);
 		if (it != channels.end()) return it->second;
-		if (channels.size() >= 8) return channels.empty() ? -1 : channels.begin()->second; // reuse one
+		if (channels.size() >= 16) return channels.empty() ? -1 : channels.begin()->second; // reuse one
 		int ch = base + (int)channels.size();
-		auto c = cc3bFromHexString(color).unwrapOr(ccc3(255, 255, 255));
+		// "#RRGGBB|a30|add": optional 30% opacity and additive blending
+		std::string hexPart = color;
+		float op = 1.f;
+		bool add = false;
+		if (auto bar = color.find('|'); bar != std::string::npos) {
+			hexPart = color.substr(0, bar);
+			std::stringstream ss(color.substr(bar + 1));
+			std::string tok;
+			while (std::getline(ss, tok, '|')) {
+				if (tok == "add") add = true;
+				else if (tok.size() > 1 && tok[0] == 'a') op = std::clamp((float)std::atoi(tok.c_str() + 1) / 100.f, 0.f, 1.f);
+			}
+		}
+		auto c = cc3bFromHexString(hexPart).unwrapOr(ccc3(255, 255, 255));
 		// Write the channel to BOTH managers: the level settings one is what gets saved and
 		// what playtest loads; the live one is what the editor is drawing right now.
 		for (auto m : mgrs) {
@@ -827,13 +918,17 @@ void ArtAgentPopup::spawnDraft(std::vector<DraftSpec> const& specs) {
 			action->m_toColor = c;
 			action->m_duration = 0.f;
 			action->m_deltaTime = 0.f;
-			action->m_blending = false;
+			action->m_blending = add;
+			action->m_fromOpacity = op;
+			action->m_toOpacity = op;
+			action->m_currentOpacity = op;
 			action->m_playerColor = -1; // no player color
 			action->m_copyID = 0;
 			m->colorActionChanged(action);
 		}
 		channels[color] = ch;
 		chanColor[ch] = c;
+		chanOp[ch] = op;
 		return ch;
 	};
 	auto tint = [&](GameObject* obj, int ch) {
@@ -844,6 +939,10 @@ void ArtAgentPopup::spawnDraft(std::vector<DraftSpec> const& specs) {
 		}
 		// direct tint too, so the preview is coloured even before the channel refresh lands
 		obj->setObjectColor(chanColor[ch]);
+		if (chanOp[ch] < 0.99f) {
+			obj->setOpacity((GLubyte)(chanOp[ch] * 255.f));
+			translucent.push_back({obj, chanOp[ch]});
+		}
 	};
 
 	for (auto const& s : specs) {
@@ -879,4 +978,6 @@ void ArtAgentPopup::spawnDraft(std::vector<DraftSpec> const& specs) {
 	// make the editor recompute channel colors and redraw the new objects
 	for (auto m : mgrs) m->calculateBaseActiveColors();
 	lel->updateObjectColors(fresh);
+	// make sure the editor preview shows the transparency even if the refresh reset it
+	for (auto& [o, op] : translucent) o->setOpacity((GLubyte)(op * 255.f));
 }

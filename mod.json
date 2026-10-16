@@ -47,13 +47,19 @@
 		"recolor-slopes": {
 			"type": "bool",
 			"name": "Recolor selected slopes",
-			"description": "Tint the original slope objects with the mortar color so gaps between bricks match (undone if you discard the draft).",
+			"description": "Experimental: tint the original slope objects with the mortar color (undone if you discard the draft). Off by default; slopes get a mortar backing either way.",
+			"default": false
+		},
+		"glow": {
+			"type": "bool",
+			"name": "Glow and shading effects",
+			"description": "Adds additive glow (lava/cracks) and bottom shading using transparent color channels. Turn off if they look wrong.",
 			"default": true
 		},
 		"color-channel-start": {
 			"type": "int",
 			"name": "First color channel used",
-			"description": "The agent uses up to 8 channels starting here. Pick unused ones.",
+			"description": "The agent uses up to 16 channels starting here. Pick unused ones.",
 			"default": 900,
 			"min": 1,
 			"max": 990,
