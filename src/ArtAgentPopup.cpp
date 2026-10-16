@@ -228,19 +228,22 @@ Field meanings (sizes are in blocks, 1 block = 1 grid square). Only "summary", "
 - mortar: very dark color for seams, backing and outline (darker than the darkest shade).
 - edge: decoration on TOP surfaces. moss/grass = green growth, snow = white, frost = pale icy drips, slime = dripping goo, lava = glowing drips, blood = dark red drips, sand = drifted sand, neon = glowing strip. depth 0.1 to 0.35. Use "none" for clean materials like metal, tech or plain stone.
 - accent: scattered detail. spots = small speckles, cracks = thin slashes. density 0 to 0.3. A bright accent color on cracks makes them glow.
-- damage: "missing" 0 to 0.3 = fraction of pieces left out so seams/holes show. "glow" = optional color that shines out of those holes (ember orange, magical blue, toxic green, light leaking in). Leave glow out for plain holes.
+- damage: "missing" 0 to 0.15 = fraction of pieces left out so seams/holes show. "glow" = optional faint color shining out of those holes (embers, magic, toxic light); leave it out for plain holes.
 - trim: a horizontal band across the structure every N rows (every = 2 to 12, 0 = none). Good for castle cornices, tech stripes, wooden beams. Pick a color lighter or different from the main shades.
-- glow: soft light rising from the BOTTOM of the structure. height = fraction of the structure it reaches (0.1 to 0.6), strength 0 to 1. Use it for lava, fire, underwater light, toxic fumes, neon spill; omit for ordinary materials.
+- glow: faint light rising from the BOTTOM of the structure. height = fraction it reaches (0.1 to 0.5), strength 0 to 1 (use 0.2 to 0.4). Only for requests that clearly want glowing light (lava, fire, neon, magic); omit it otherwise.
 
 Style hints (starting points, not rules; vary freely and match the request):
 - Stone castle: stones 1x0.5, greys, moss edge, dark cracks, trim every 6 in light grey.
 - Wood: planks 3x0.5, gap 0.03, rotation_jitter 0, browns, no edge, a few dark spots.
 - Ice cave: tiles 1x1, pale blues, white spots, frost edge, cyan cracks, glow in pale blue.
-- Hell: bricks 1x0.5, very dark reds/blacks, lava edge, orange cracks, damage glow orange, bottom glow orange.
+- Hell: bricks 1x0.5, very dark reds/blacks/greys, lava edge, orange cracks; optionally damage 0.05 and a faint bottom glow (strength 0.3).
 - Sci-fi hull: tiles 1x1 or 2x1, cool dark greys/blues, gap 0.08, trim every 3 in cyan, neon edge, no damage.
 - Desert ruins: stones 1x0.5, warm sand and ochre, sand edge, damage 0.15 with no glow.
-- Toxic sewer: bricks 1x0.5, murky greens, slime edge in bright green, damage glow green, bottom glow green.
+- Toxic sewer: bricks 1x0.5, murky greens, slime edge in bright green, optional faint green bottom glow.
 - Graveyard / bone: cobble, desaturated grey-purples, moss edge, cracks, a cold pale glow.
+Rules that matter:
+- The colors the user names win. "dark red and gray" means the "colors" array must be dark reds and greys, not bright orange. Glow, edge and accent colors are small highlights; they must never make the main material look bright or washed out.
+- Prefer fewer features done well: most designs need only pattern, colors, mortar and perhaps an edge or accent. Add damage, trim or glow only when the theme clearly calls for it.
 If the user asks for changes, return the COMPLETE updated style object.)PROMPT";
 }
 
@@ -478,7 +481,7 @@ void ArtAgentPopup::handleReply(std::string text) {
 		this->clearDraft();
 		this->spawnDraft(gen);
 		this->setCount();
-		this->say(v["summary"].asString().unwrapOr("Here's a draft."));
+		this->say(v["summary"].asString().unwrapOr("Here's a draft.") + "\n" + this->styleReadout(v));
 		return;
 	}
 
@@ -537,6 +540,19 @@ static std::string hexOf(ccColor3B c) {
 }
 
 // Deterministic, silhouette-aware tiling. The model only supplies the style.
+// One short line describing what the model picked, so a surprising result can be diagnosed from a screenshot.
+std::string ArtAgentPopup::styleReadout(matjson::Value v) {
+	std::string cols;
+	for (auto& c : arrOf(v["colors"])) cols += (cols.empty() ? "" : " ") + c.asString().unwrapOr("?");
+	auto edge = v["edge"];
+	std::string es = edge.isObject() ? edge["style"].asString().unwrapOr("none") : "none";
+	std::string extras;
+	if (v["damage"].isObject()) extras += " damage";
+	if (v["trim"].isObject()) extras += " trim";
+	if (v["glow"].isObject()) extras += " glow";
+	return fmt::format("[{} | {} | edge {}{}]", v["pattern"].asString().unwrapOr("?"), cols, es, extras);
+}
+
 std::vector<DraftSpec> ArtAgentPopup::generateDraft(matjson::Value v) {
 	// occupancy grid (rows[j][i], j = 0 is the bottom row)
 	std::vector<std::string> rows(m_rows, std::string(m_cols, '.'));
@@ -613,8 +629,8 @@ std::vector<DraftSpec> ArtAgentPopup::generateDraft(matjson::Value v) {
 
 	// transparent / additive channels ("#RRGGBB|a30|add" = 30% opacity, additive blending)
 	bool fx = Mod::get()->getSettingValue<bool>("glow");
-	std::string glowEdge = edgeColor + "|a30|add";
-	std::string glowAcc = accColor + "|a30|add";
+	std::string glowEdge = edgeColor + "|a20|add";
+	std::string glowAcc = accColor + "|a25|add";
 	bool glowy = fx && (edgeStyle == "lava" || edgeStyle == "slime" || edgeStyle == "neon");
 
 	// optional, theme-neutral features (all off unless the style asks for them)
@@ -624,7 +640,7 @@ std::vector<DraftSpec> ArtAgentPopup::generateDraft(matjson::Value v) {
 	float missing = (float)std::clamp(dbl(damageV, "missing", 0.0), 0.0, 0.3);
 	std::string holeGlow = str(damageV, "glow", "");
 	if (!holeGlow.empty()) holeGlow = hex(holeGlow, "#FF5A14");
-	std::string holeCol = (fx && !holeGlow.empty()) ? holeGlow + "|a60|add" : std::string();
+	std::string holeCol = (fx && !holeGlow.empty()) ? holeGlow + "|a30|add" : std::string();
 	int trimEvery = (int)std::clamp(dbl(trimV, "every", 0.0), 0.0, 12.0);
 	std::string trimColor = str(trimV, "color", "");
 	trimColor = trimColor.empty() ? hl : hex(trimColor, hl);
@@ -707,7 +723,7 @@ std::vector<DraftSpec> ArtAgentPopup::generateDraft(matjson::Value v) {
 			float fh = std::max(0.12f, (phei - gap) * (1.f - frand(g, 0.f, sizeJ) * 0.5f));
 			// damage: leave this piece out; the mortar backing shows through, optionally with a glow inside
 			if (missing > 0.f && frand(g, 0.f, 1.f) < missing) {
-				if (!holeCol.empty()) out.push_back(mk(px, py, 0.f, fw * 0.8f, fh * 0.7f, holeCol));
+				if (!holeCol.empty()) out.push_back(mk(px, py, 0.f, fw * 0.7f, fh * 0.5f, holeCol));
 				return;
 			}
 			float rot = frand(g, -rotJ, rotJ);
@@ -789,7 +805,7 @@ std::vector<DraftSpec> ArtAgentPopup::generateDraft(matjson::Value v) {
 		return out;
 	};
 	// lay rotated strips along a segment, only where the outside is open
-	auto stripsAlong = [&](Seg const& sg, float thick, bool varyDepth, std::string const& color, std::vector<DraftSpec>& out) {
+	auto stripsAlong = [&](Seg const& sg, float thick, bool varyDepth, std::string const& color, std::vector<DraftSpec>& out, float lenMul = 1.3f) {
 		float dx = sg.x1 - sg.x0, dy = sg.y1 - sg.y0;
 		float len = std::sqrt(dx * dx + dy * dy);
 		int cnt = std::max(1, (int)std::ceil(len / 0.5f));
@@ -803,7 +819,7 @@ std::vector<DraftSpec> ArtAgentPopup::generateDraft(matjson::Value v) {
 			float th = thick;
 			if (varyDepth) th = thick * (0.45f + 0.65f * vnoise(mx * 1.3f, my * 1.3f + 11.f, seed + 5));
 			float cxp = mx - sg.nx * (th / 2 - 0.04f), cyp = my - sg.ny * (th / 2 - 0.04f);
-			out.push_back(mk(cxp, cyp, ang, len / cnt * 1.3f + 0.02f, th, color));
+			out.push_back(mk(cxp, cyp, ang, len / cnt * lenMul + 0.02f, th, color));
 		}
 	};
 
@@ -828,7 +844,7 @@ std::vector<DraftSpec> ArtAgentPopup::generateDraft(matjson::Value v) {
 		for (auto const& t : m_tris)
 			for (auto const& sg : segsOf(t))
 				if (sg.ny > 0.3f) {
-					if (glowy) stripsAlong(sg, edgeDepth * 2.4f, false, glowEdge, glowLayer);
+					if (glowy) stripsAlong(sg, edgeDepth * 2.0f, false, glowEdge, glowLayer, 1.0f);
 					stripsAlong(sg, edgeDepth, true, edgeColor, out);
 				}
 		return out;
@@ -897,23 +913,25 @@ std::vector<DraftSpec> ArtAgentPopup::generateDraft(matjson::Value v) {
 		return out;
 	};
 
-	// ---- 4d) soft light rising from the bottom (additive, two opacity steps)
+	// ---- 4d) soft light rising from the bottom (additive, 2 gentle levels). Follows the real silhouette,
+	// slopes included, by scanning each thin slice with occ() instead of using whole block cells.
 	auto genBottomGlow = [&]() {
 		std::vector<DraftSpec> out;
 		if (!fx || bgStrength <= 0.f || bgColor.empty()) return out;
-		for (int j = 0; j < m_rows; j++) {
-			float f = (j + 0.5f) / (float)m_rows;
-			if (f >= bgHeight) break;
-			float t = 1.f - f / bgHeight;
-			int op = (int)std::lround(bgStrength * (t > 0.5f ? 45.f : 22.f));
-			if (op < 4) continue;
+		float hMax = bgHeight * (float)m_rows;
+		const float sl = 0.25f, stp = 0.25f;
+		for (float y0 = 0.f; y0 < hMax; y0 += sl) {
+			float ym = y0 + sl / 2.f;
+			float t = 1.f - ym / hMax;
+			int op = (int)std::lround(bgStrength * 0.5f * (t > 0.5f ? 36.f : 18.f)); // max ~18% at strength 1
+			if (op < 3) continue;
 			std::string col = fmt::format("{}|a{}|add", bgColor, op);
-			int i = 0;
-			while (i < m_cols) {
-				if (rows[j][i] != '#') { i++; continue; }
-				int st = i;
-				while (i < m_cols && rows[j][i] == '#') i++;
-				out.push_back(mk(st + (i - st) / 2.f, j + 0.5f, 0.f, (float)(i - st), 1.f, col));
+			float x = 0.f;
+			while (x < (float)m_cols) {
+				if (!occ(x + stp / 2.f, ym)) { x += stp; continue; }
+				float st = x;
+				while (x < (float)m_cols && occ(x + stp / 2.f, ym)) x += stp;
+				out.push_back(mk((st + x) / 2.f, ym, 0.f, x - st, sl, col));
 			}
 		}
 		return out;

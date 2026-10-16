@@ -63,6 +63,7 @@ protected:
 	std::string stateNote();
 	void request(std::string userMsg);
 	void handleReply(std::string text);
+	std::string styleReadout(matjson::Value v);
 	std::vector<DraftSpec> generateDraft(matjson::Value v);
 	void clearDraft();
 	void spawnDraft(std::vector<DraftSpec> const& specs);
