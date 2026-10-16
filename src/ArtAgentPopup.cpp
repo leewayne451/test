@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <map>
 #include <sstream>
+#include <random>
 
 static constexpr float B = 30.f; // 1 block in GD units
 
@@ -132,23 +133,31 @@ void ArtAgentPopup::setCount() {
 }
 
 static std::string systemPrompt() {
-	std::ostringstream os;
-	os << "You are the art agent inside Geometry Dash's level editor. The player built a structure from "
-	      "blocks; you decorate it so it looks like what they describe (stone bricks, moss, wood, ice...).\n\n"
-	      "Reply with ONLY one JSON object, no prose, no code fences:\n"
-	      "{\"summary\":\"1-2 short sentences about what you made\","
-	      "\"objects\":[{\"id\":1,\"x\":0.5,\"y\":0.5,\"rot\":0,\"sx\":1,\"sy\":1,\"color\":\"#8A8A8A\",\"front\":true}]}\n\n"
-	      "Coordinates: block units, origin at the bottom-left corner of the structure's bounding box, y points up. "
-	      "x,y is an object's CENTER; the center of the bottom-left cell is (0.5, 0.5). rot is degrees clockwise. "
-	      "sx/sy scale the object (0.2 to 4). front=true draws it in front of the original blocks.\n\n"
-	      "Allowed objects (size at scale 1, in blocks):\n";
-	for (auto const& p : palette())
-		os << "- id " << p.id << ": " << p.name << " (" << p.w << " x " << p.h << ")\n";
-	os << "\nRules: use only these ids; at most 8 distinct colors; never exceed the object limit; "
-	      "cover the structure's surface with bricks/detail that follow its silhouette; "
-	      "add variety (slight color shifts, small rotations, size changes) so it does not look tiled. "
-	      "If the user asks for changes, return the COMPLETE updated object list, not a diff.";
-	return os.str();
+	return
+		"You are the art director inside Geometry Dash's level editor. The player selected a structure made of blocks "
+		"and describes how it should look (stone wall, wood, ice, moss...). You do NOT place objects. You choose a "
+		"visual STYLE, and the mod itself tiles it precisely over the structure's silhouette.\n\n"
+		"Reply with ONLY one JSON object, no prose, no code fences:\n"
+		"{\"summary\":\"1-2 short sentences\","
+		"\"pattern\":\"bricks|stones|tiles|planks\","
+		"\"brick_w\":1.0,\"brick_h\":0.5,\"gap\":0.06,"
+		"\"rotation_jitter\":2,\"size_jitter\":0.1,"
+		"\"colors\":[\"#6B6B6B\",\"#7E7E7E\",\"#909090\",\"#5A5A5A\"],"
+		"\"edge\":{\"style\":\"none|moss|grass|snow|slime\",\"color\":\"#4F7A2E\",\"depth\":0.25},"
+		"\"accent\":{\"type\":\"spots|cracks\",\"color\":\"#3E3E3E\",\"density\":0.05}}\n\n"
+		"Field meanings (sizes are in blocks, 1 block = 1 grid square):\n"
+		"- pattern: bricks = running-bond rows; stones = irregular rows of uneven stones; tiles = aligned grid; planks = long horizontal boards.\n"
+		"- brick_w / brick_h: size of one piece (0.25 to 4). gap: dark seam between pieces (0 to 0.3) that shows the original block through. "
+		"The mod enlarges pieces automatically if the object limit would be exceeded, so do not worry about counts.\n"
+		"- rotation_jitter: max random tilt in degrees (0 to 15). size_jitter: random size variation (0 to 0.4).\n"
+		"- colors: 3 to 5 shades of the MAIN material, pieces pick randomly among them. Use close shades (slightly lighter/darker) for a natural look.\n"
+		"- edge: decoration growing on the TOP surfaces. moss/grass = green, snow = white, slime = drips. depth 0.1 to 0.6.\n"
+		"- accent: scattered detail. spots = small speckles, cracks = thin dark slashes. density 0 to 0.3 (fraction of cells).\n\n"
+		"Style hints: stone castle: stones or bricks 1x0.5, gap 0.06, greys, cracks, moss edge. Wood: planks 3x0.5, gap 0.03, "
+		"rotation_jitter 0, browns. Ice: tiles 1x1, gap 0.02, pale blues, white spots, snow edge. Sand/desert: stones, warm yellows. "
+		"Lava rock: stones, dark reds/blacks, orange spots. Total distinct colors must stay at or below 7 "
+		"(colors + edge + accent).\n"
+		"If the user asks for changes, return the COMPLETE updated style object.";
 }
 
 std::string ArtAgentPopup::stateNote() {
@@ -242,7 +251,8 @@ void ArtAgentPopup::request(std::string userMsg) {
 		{"contents", contents},
 		{"generationConfig", matjson::makeObject({
 			{"responseMimeType", "application/json"}, // forces valid JSON output
-			{"maxOutputTokens", 60000},
+			{"maxOutputTokens", 4000},
+			{"thinkingConfig", matjson::makeObject({{"thinkingBudget", 0}})}, // skip slow "thinking" phase (flash models)
 		})},
 	});
 
@@ -312,6 +322,15 @@ void ArtAgentPopup::handleReply(std::string text) {
 	auto v = parsed.unwrap();
 	m_history.push_back({"assistant", text});
 
+	if (v["pattern"].isString()) {
+		auto gen = this->generateDraft(v);
+		this->clearDraft();
+		this->spawnDraft(gen);
+		this->setCount();
+		this->say(v["summary"].asString().unwrapOr("Here's a draft."));
+		return;
+	}
+
 	std::vector<DraftSpec> specs;
 	std::map<int, bool> allowed;
 	for (auto& p : palette()) allowed[p.id] = true;
@@ -336,6 +355,211 @@ void ArtAgentPopup::handleReply(std::string text) {
 	this->spawnDraft(specs);
 	this->setCount();
 	this->say(v["summary"].asString().unwrapOr("Here's a draft."));
+}
+
+
+static float frand(std::mt19937& g, float a, float b) {
+	return std::uniform_real_distribution<float>(a, b)(g);
+}
+
+// Deterministic, silhouette-aware tiling. The model only supplies the style.
+std::vector<DraftSpec> ArtAgentPopup::generateDraft(matjson::Value v) {
+	// occupancy grid (rows[j][i], j = 0 is the bottom row)
+	std::vector<std::string> rows(m_rows, std::string(m_cols, '.'));
+	{
+		std::istringstream is(m_grid);
+		std::string line;
+		int n = 0;
+		while (n < m_rows && std::getline(is, line)) {
+			for (int i = 0; i < m_cols && i < (int)line.size(); i++) rows[m_rows - 1 - n][i] = line[i];
+			n++;
+		}
+	}
+	auto occ = [&](float x, float y) {
+		int i = (int)std::floor(x), j = (int)std::floor(y);
+		if (i < 0 || j < 0 || i >= m_cols || j >= m_rows) return false;
+		return rows[j][i] == '#';
+	};
+
+	auto str = [](matjson::Value& o, char const* k, std::string d) -> std::string {
+		return o.isObject() ? o[k].asString().unwrapOr(d) : d;
+	};
+	auto dbl = [](matjson::Value& o, char const* k, double d) -> double {
+		return o.isObject() ? o[k].asDouble().unwrapOr(d) : d;
+	};
+	auto hex = [](std::string c, std::string fallback) {
+		if (c.empty()) c = fallback;
+		if (c[0] != '#') c = "#" + c;
+		return c;
+	};
+
+	std::string pattern = str(v, "pattern", "bricks");
+	float bw = (float)std::clamp(dbl(v, "brick_w", 1.0), 0.25, 4.0);
+	float bh = (float)std::clamp(dbl(v, "brick_h", 0.5), 0.25, 4.0);
+	float gap = (float)std::clamp(dbl(v, "gap", 0.06), 0.0, 0.3);
+	float rotJ = (float)std::clamp(dbl(v, "rotation_jitter", 2.0), 0.0, 15.0);
+	float sizeJ = (float)std::clamp(dbl(v, "size_jitter", 0.1), 0.0, 0.4);
+
+	std::vector<std::string> base;
+	for (auto& c : arrOf(v["colors"])) {
+		auto cs = c.asString().unwrapOr("");
+		if (!cs.empty() && base.size() < 5) base.push_back(hex(cs, "#888888"));
+	}
+	if (base.empty()) base = {"#8A8A8A", "#7A7A7A", "#9A9A9A"};
+
+	auto edgeV = v["edge"];
+	auto accV = v["accent"];
+	std::string edgeStyle = str(edgeV, "style", "none");
+	std::string edgeColor = hex(str(edgeV, "color", "#4F7A2E"), "#4F7A2E");
+	float edgeDepth = (float)std::clamp(dbl(edgeV, "depth", 0.25), 0.1, 0.6);
+	std::string accType = str(accV, "type", "spots");
+	std::string accColor = hex(str(accV, "color", "#3E3E3E"), "#3E3E3E");
+	float accDens = (float)std::clamp(dbl(accV, "density", 0.0), 0.0, 0.3);
+
+	unsigned seed = 1337u + 7919u * (unsigned)m_variant + 104729u * (unsigned)m_history.size()
+		+ (unsigned)(m_cols * 31 + m_rows);
+
+	auto mk = [](float x, float y, float rot, float sx, float sy, std::string const& color) {
+		DraftSpec s;
+		s.id = 211; // decorative square: no hitbox, so it never changes gameplay
+		s.x = x; s.y = y; s.rot = rot;
+		s.sx = std::clamp(sx, 0.05f, 4.f);
+		s.sy = std::clamp(sy, 0.05f, 4.f);
+		s.color = color;
+		s.front = true;
+		return s;
+	};
+
+	// ---- main surface pieces
+	auto genBricks = [&](float k) {
+		std::vector<DraftSpec> out;
+		std::mt19937 g(seed);
+		float w = bw * k, h = bh * k;
+		bool stagger = pattern != "tiles";
+		float irr = pattern == "stones" ? 0.35f : 0.f;
+		float e = 0.05f;
+		float y = 0.f;
+		int r = 0;
+		while (y < (float)m_rows - 0.05f) {
+			float rh = h * (irr > 0 ? frand(g, 1.f - irr, 1.f + irr) : 1.f);
+			float x = stagger ? (irr > 0 ? -frand(g, 0.f, w) : ((r % 2) ? -w * 0.5f : 0.f)) : 0.f;
+			while (x < (float)m_cols - 0.05f) {
+				float pw = w * (irr > 0 ? frand(g, 1.f - irr, 1.f + irr) : 1.f);
+				float l = x, rg = x + pw, b = y, t = y + rh;
+				x += pw;
+				if (!m_overhang) {
+					l = std::max(l, 0.f); rg = std::min(rg, (float)m_cols);
+					b = std::max(b, 0.f); t = std::min(t, (float)m_rows);
+				}
+				float ww = rg - l, hh = t - b;
+				if (ww < 0.15f || hh < 0.15f) continue;
+				float cx = (l + rg) / 2, cy = (b + t) / 2;
+
+				auto cornersIn = [&](float L, float R, float B2, float T) {
+					return occ(L + e, B2 + e) && occ(R - e, B2 + e) && occ(L + e, T - e) && occ(R - e, T - e)
+						&& occ((L + R) / 2, (B2 + T) / 2);
+				};
+				auto place = [&](float px, float py, float pwid, float phei) {
+					float jx = 1.f + frand(g, -sizeJ, sizeJ) * 0.5f;
+					float jy = 1.f + frand(g, -sizeJ, sizeJ) * 0.5f;
+					int ci = (int)(frand(g, 0.f, 0.9999f) * base.size());
+					out.push_back(mk(px, py, frand(g, -rotJ, rotJ),
+						(pwid - gap) * jx, (phei - gap) * jy, base[ci]));
+				};
+
+				if (m_overhang) {
+					if (occ(cx, cy)) place(cx, cy, ww, hh);
+				} else if (cornersIn(l, rg, b, t)) {
+					place(cx, cy, ww, hh);
+				} else {
+					// partial piece along an irregular edge: fill with quarter pieces that fit
+					for (int qx = 0; qx < 2; qx++) for (int qy = 0; qy < 2; qy++) {
+						float ql = l + qx * ww / 2, qr = ql + ww / 2;
+						float qb = b + qy * hh / 2, qt = qb + hh / 2;
+						if (cornersIn(ql, qr, qb, qt)) place((ql + qr) / 2, (qb + qt) / 2, ww / 2, hh / 2);
+					}
+				}
+			}
+			y += rh;
+			r++;
+		}
+		return out;
+	};
+
+	// ---- edge decoration on exposed top surfaces
+	auto genEdge = [&]() {
+		std::vector<DraftSpec> out;
+		if (edgeStyle == "none") return out;
+		std::mt19937 g(seed + 1);
+		bool drips = edgeStyle == "moss" || edgeStyle == "slime";
+		int pieces = edgeStyle == "grass" ? 4 : 2;
+		for (int j = 0; j < m_rows; j++) for (int i = 0; i < m_cols; i++) {
+			if (!occ(i + 0.5f, j + 0.5f) || occ(i + 0.5f, j + 1.5f)) continue;
+			for (int p = 0; p < pieces; p++) {
+				float depth = edgeDepth * frand(g, 0.7f, 1.4f);
+				float width = (1.f / pieces) * frand(g, 1.0f, 1.5f);
+				float cx = i + (p + 0.5f) / pieces + frand(g, -0.08f, 0.08f);
+				float cy = j + 1.f - depth / 2 + 0.05f;
+				out.push_back(mk(cx, cy, frand(g, -4.f, 4.f), width, depth, edgeColor));
+			}
+			if (drips && frand(g, 0.f, 1.f) < 0.35f) {
+				float len = frand(g, 0.3f, 0.9f);
+				float cx = i + frand(g, 0.15f, 0.85f);
+				out.push_back(mk(cx, j + 1.f - edgeDepth - len / 2 + 0.05f, 0.f, frand(g, 0.15f, 0.3f), len, edgeColor));
+			}
+		}
+		return out;
+	};
+
+	// ---- scattered accents (speckles or cracks)
+	auto genAccent = [&]() {
+		std::vector<DraftSpec> out;
+		if (accDens <= 0.f) return out;
+		std::mt19937 g(seed + 2);
+		int occupied = 0;
+		for (int j = 0; j < m_rows; j++) for (int i = 0; i < m_cols; i++) if (rows[j][i] == '#') occupied++;
+		int n = (int)(occupied * accDens);
+		for (int tries = 0; tries < n * 8 && (int)out.size() < n; tries++) {
+			float x = frand(g, 0.f, (float)m_cols), y = frand(g, 0.f, (float)m_rows);
+			if (!occ(x, y)) continue;
+			if (accType == "cracks") {
+				float len = frand(g, 0.4f, 1.1f);
+				if (!occ(x - 0.3f, y) || !occ(x + 0.3f, y) || !occ(x, y - 0.3f) || !occ(x, y + 0.3f)) continue;
+				out.push_back(mk(x, y, frand(g, 0.f, 180.f), 0.07f, len, accColor));
+			} else {
+				float sz = frand(g, 0.12f, 0.35f);
+				out.push_back(mk(x, y, frand(g, 0.f, 45.f), sz, sz, accColor));
+			}
+		}
+		return out;
+	};
+
+	int L = limit();
+	auto edge = genEdge();
+	auto acc = genAccent();
+	std::mt19937 trim(seed + 3);
+	size_t edgeCap = (size_t)std::max(1, (int)(L * 0.35f)), accCap = (size_t)std::max(1, (int)(L * 0.15f));
+	if (edge.size() > edgeCap) { std::shuffle(edge.begin(), edge.end(), trim); edge.resize(edgeCap); }
+	if (acc.size() > accCap) { std::shuffle(acc.begin(), acc.end(), trim); acc.resize(accCap); }
+	int reserve = (int)(edge.size() + acc.size());
+
+	// enlarge pieces until everything fits in the object limit
+	float k = 1.f;
+	std::vector<DraftSpec> bricks;
+	for (int it = 0; it < 40; it++) {
+		bricks = genBricks(k);
+		if ((int)bricks.size() + reserve <= L) break;
+		k *= 1.15f;
+		if (k > 20.f) break;
+	}
+	if ((int)bricks.size() + reserve > L) bricks.resize(std::max(0, L - reserve));
+
+	std::vector<DraftSpec> all;
+	all.reserve(bricks.size() + acc.size() + edge.size());
+	for (auto& s : bricks) all.push_back(s);
+	for (auto& s : acc) all.push_back(s);
+	for (auto& s : edge) all.push_back(s);
+	return all;
 }
 
 void ArtAgentPopup::clearDraft() {
