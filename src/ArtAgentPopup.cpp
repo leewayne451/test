@@ -112,7 +112,8 @@ void ArtAgentPopup::buildGrid(std::vector<CCRect> const& rects, std::vector<CCRe
 	for (auto const& so : slopes) slopeRects.push_back(static_cast<GameObject*>(so)->getObjectRect());
 
 	float minX = 1e9f, minY = 1e9f, maxX = -1e9f, maxY = -1e9f;
-	for (auto const* group : {&rects, &hazards, &slopeRects}) {
+	std::vector<CCRect> const* groups[] = {&rects, &hazards, &slopeRects};
+	for (auto const* group : groups) {
 		for (auto const& r : *group) {
 			minX = std::min(minX, r.getMinX()); minY = std::min(minY, r.getMinY());
 			maxX = std::max(maxX, r.getMaxX()); maxY = std::max(maxY, r.getMaxY());
