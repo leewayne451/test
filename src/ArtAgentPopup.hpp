@@ -35,7 +35,10 @@ protected:
 
 	TextInput* m_prompt = nullptr;
 	TextInput* m_limitInput = nullptr;
-	TextInput* m_refsInput = nullptr;
+	CCLabelBMFont* m_imgLabel = nullptr;
+	// the single optional reference image (read and base64-encoded when picked)
+	std::string m_imgName, m_imgMime, m_imgB64;
+	async::TaskHolder<geode::utils::file::PickResult> m_pickTask;
 	SimpleTextArea* m_agentText = nullptr;
 	CCLabelBMFont* m_countLabel = nullptr;
 
@@ -50,14 +53,14 @@ protected:
 	void setCount();
 
 	void onSend(CCObject*);
-	void onRefsFolder(CCObject*);
+	void onPickImage(CCObject*);
+	void onClearImage(CCObject*);
+	void setImage(std::filesystem::path const& path);
 	void onDiscard(CCObject*);
 	void onKeep(CCObject*);
 	void onClose(CCObject*) override;
 
 	std::string stateNote();
-	// Loads the reference images named in the Refs box as Gemini "inlineData" parts.
-	std::vector<matjson::Value> refParts(std::string& usedNames, std::string& warning);
 	void request(std::string userMsg);
 	void handleReply(std::string text);
 	std::vector<DraftSpec> generateDraft(matjson::Value v);
@@ -65,7 +68,5 @@ protected:
 	void spawnDraft(std::vector<DraftSpec> const& specs);
 
 public:
-	// Screenshots the editor view into <save dir>/references/ so it can be used as a style reference.
-	static void snapReference(EditorUI* ui);
 	static ArtAgentPopup* create(EditorUI* ui, std::vector<CCRect> const& rects, std::vector<CCRect> const& hazards, std::vector<Ref<GameObject>> const& slopes);
 };

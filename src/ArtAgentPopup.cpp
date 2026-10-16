@@ -10,15 +10,9 @@
 #include <random>
 #include <functional>
 #include <filesystem>
-#include <ctime>
 #include <Geode/utils/base64.hpp>
 
 static constexpr float B = 30.f; // 1 block in GD units
-
-// Reference screenshots live here (see the Ref button in the editor and the Refs box in the panel).
-static std::filesystem::path refsDir() {
-	return Mod::get()->getSaveDir() / "references";
-}
 
 static bool inTri(SlopeTri const& t, float x, float y) {
 	float dx = t.ax - t.px, dy = t.by - t.py;
@@ -76,19 +70,23 @@ bool ArtAgentPopup::init(EditorUI* ui, std::vector<CCRect> const& rects, std::ve
 
 	m_prompt = TextInput::create(165.f, "Describe the design...", "chatFont.fnt");
 	m_prompt->setMaxCharCount(300);
+	m_prompt->setCommonFilter(CommonFilter::Any); // allow punctuation and symbols
 	m_mainLayer->addChildAtPosition(m_prompt, Anchor::Bottom, {-24, 112});
 
 	auto send = CCMenuItemExt::createSpriteExtra(btnSpr("Go", 30), [this](CCObject* s) { onSend(s); });
 	m_buttonMenu->addChildAtPosition(send, Anchor::Bottom, {88, 112});
 
-	// reference screenshots: names of image files in the references folder, comma separated
-	m_refsInput = TextInput::create(165.f, "Refs: name, name", "chatFont.fnt");
-	m_refsInput->setMaxCharCount(200);
-	m_refsInput->setString(Mod::get()->getSavedValue<std::string>("refs", ""));
-	m_mainLayer->addChildAtPosition(m_refsInput, Anchor::Bottom, {-24, 86});
-	auto dirBtn = CCMenuItemExt::createSpriteExtra(btnSpr("Dir", 30, "GJ_button_04.png"),
-		[this](CCObject* s) { onRefsFolder(s); });
-	m_buttonMenu->addChildAtPosition(dirBtn, Anchor::Bottom, {88, 86});
+	// optional single reference image, picked with the system file picker
+	auto imgBtn = CCMenuItemExt::createSpriteExtra(btnSpr("Image", 56, "GJ_button_04.png"),
+		[this](CCObject* s) { onPickImage(s); });
+	m_buttonMenu->addChildAtPosition(imgBtn, Anchor::Bottom, {-72, 86});
+	m_imgLabel = CCLabelBMFont::create("No image", "chatFont.fnt");
+	m_imgLabel->setScale(0.6f);
+	m_imgLabel->setAnchorPoint({0.f, 0.5f});
+	m_mainLayer->addChildAtPosition(m_imgLabel, Anchor::Bottom, {-38, 86});
+	auto imgClear = CCMenuItemExt::createSpriteExtra(btnSpr("X", 22, "GJ_button_06.png"),
+		[this](CCObject* s) { onClearImage(s); });
+	m_buttonMenu->addChildAtPosition(imgClear, Anchor::Bottom, {96, 86});
 
 	auto limitLbl = CCLabelBMFont::create("Limit", "bigFont.fnt");
 	limitLbl->setScale(0.35f);
@@ -207,7 +205,7 @@ void ArtAgentPopup::setCount() {
 static std::string systemPrompt() {
 	return R"PROMPT(You are the art director inside Geometry Dash's level editor. The player selected a structure made of blocks and describes how it should look. The theme can be anything: stone castle, wood, ice, hell, sci-fi, neon, desert ruins, toxic sewer, candy, graveyard, deep sea, and so on. You do NOT place objects. You choose a visual STYLE, and the mod itself tiles it precisely over the structure's silhouette, adds a mortar backing, bevel highlights/shadows and an outline.
 
-If reference images are attached, they are screenshots of levels the player likes. Study their palette, material shapes, mood, contrast and level of detail, and make your style capture that feel. Do not try to copy them literally. The written request always wins if it conflicts with the references.
+If a reference image is attached, it is a screenshot of a look the player likes. Study its palette, material shapes, mood, contrast and level of detail, and make your style capture that feel. Do not try to copy it literally. The written request always wins if it conflicts with the image.
 
 Reply with ONLY one JSON object, no prose, no code fences:
 {"summary":"1-2 short sentences",
@@ -262,94 +260,48 @@ void ArtAgentPopup::onSend(CCObject*) {
 		msg = fmt::format("Change request: {}\n{}", text, stateNote());
 	}
 	m_prompt->setString("");
-	Mod::get()->setSavedValue<std::string>("refs", m_refsInput->getString());
 	this->request(msg);
 }
 
-void ArtAgentPopup::onRefsFolder(CCObject*) {
-	std::error_code ec;
-	std::filesystem::create_directories(refsDir(), ec);
-	(void)geode::utils::file::openFolder(refsDir());
+// Opens the system file picker for ONE reference image (PNG/JPG). The file is read and base64-encoded now,
+// and sent along with the first request. Pick again to replace it, or X to remove it.
+void ArtAgentPopup::onPickImage(CCObject*) {
+	geode::utils::file::FilePickOptions opts;
+	opts.filters.push_back({"Images", {"*.png", "*.jpg", "*.jpeg"}});
+	m_pickTask.spawn(geode::utils::file::pick(geode::utils::file::PickMode::OpenFile, opts),
+		[this](geode::utils::file::PickResult res) {
+			if (res.isErr()) {
+				this->say("Couldn't open the file picker.");
+				return;
+			}
+			auto picked = std::move(res).unwrap();
+			if (!picked) return; // cancelled
+			this->setImage(*picked);
+		});
 }
 
-// Reads the reference screenshots named in the Refs box (max 4, max 6 MB each).
-std::vector<matjson::Value> ArtAgentPopup::refParts(std::string& usedNames, std::string& warning) {
-	std::vector<matjson::Value> out;
-	std::vector<std::string> missing;
-	std::stringstream ss(m_refsInput->getString());
-	std::string tok;
-	int used = 0;
-	while (std::getline(ss, tok, ',')) {
-		auto bad = [](unsigned char c) { return std::isspace(c) || c == '"' || c == '\''; };
-		while (!tok.empty() && bad(tok.back())) tok.pop_back();
-		size_t a = 0;
-		while (a < tok.size() && bad(tok[a])) a++;
-		tok = tok.substr(a);
-		if (tok.empty()) continue;
-		if (used >= 4) { warning += " Only the first 4 references are used."; break; }
-		// plain file names only: no folders, no ".."
-		if (tok.find('/') != std::string::npos || tok.find('\\') != std::string::npos || tok.find("..") != std::string::npos) {
-			missing.push_back(tok);
-			continue;
-		}
-		std::filesystem::path found;
-		for (char const* ext : {"", ".png", ".jpg", ".jpeg"}) {
-			auto p = refsDir() / (tok + ext);
-			std::error_code ec;
-			if (std::filesystem::is_regular_file(p, ec)) { found = p; break; }
-		}
-		if (found.empty()) { missing.push_back(tok); continue; }
-		auto r = geode::utils::file::readBinary(found);
-		if (r.isErr()) { missing.push_back(tok); continue; }
-		auto bytes = r.unwrap();
-		if (bytes.empty() || bytes.size() > 6u * 1024u * 1024u) { missing.push_back(tok + " (empty or over 6 MB)"); continue; }
-		std::string ext = found.extension().string();
-		for (auto& c : ext) c = (char)std::tolower((unsigned char)c);
-		std::string mime = ext == ".png" ? "image/png" : "image/jpeg";
-		out.push_back(matjson::makeObject({{"inlineData", matjson::makeObject({
-			{"mimeType", mime},
-			{"data", geode::utils::base64::encode(bytes)},
-		})}}));
-		usedNames += (usedNames.empty() ? "" : ", ") + tok;
-		used++;
+void ArtAgentPopup::setImage(std::filesystem::path const& path) {
+	auto r = geode::utils::file::readBinary(path);
+	if (r.isErr()) { this->say("Couldn't read that image."); return; }
+	auto bytes = r.unwrap();
+	if (bytes.empty()) { this->say("That image file is empty."); return; }
+	if (bytes.size() > 6u * 1024u * 1024u) {
+		this->say("That image is over 6 MB. Pick a smaller one or save it as a JPG.");
+		return;
 	}
-	if (!missing.empty()) {
-		std::string list;
-		for (auto& m : missing) list += (list.empty() ? "" : ", ") + m;
-		warning = "Refs not found: " + list + "." + warning;
-	}
-	return out;
+	std::string ext = path.extension().string();
+	for (auto& c : ext) c = (char)std::tolower((unsigned char)c);
+	m_imgMime = ext == ".png" ? "image/png" : "image/jpeg";
+	m_imgB64 = geode::utils::base64::encode(bytes);
+	m_imgName = path.filename().string();
+	std::string shown = m_imgName.size() > 22 ? m_imgName.substr(0, 19) + "..." : m_imgName;
+	m_imgLabel->setString(shown.c_str());
+	this->say("Image attached. It will be used as a style reference with your next request.");
 }
 
-void ArtAgentPopup::snapReference(EditorUI* ui) {
-	std::error_code ec;
-	std::filesystem::create_directories(refsDir(), ec);
-	auto lel = ui->m_editorLayer;
-	auto win = CCDirector::get()->getWinSize();
-	auto rt = CCRenderTexture::create((int)win.width, (int)win.height);
-	if (!rt) {
-		FLAlertLayer::create("Art Agent", "Couldn't capture the editor view.", "OK")->show();
-		return;
-	}
-	rt->begin();
-	lel->visit(); // the level only: no editor UI, no panel
-	rt->end();
-
-	auto name = fmt::format("snap-{}", (long long)std::time(nullptr));
-	auto path = refsDir() / (name + ".png");
-	bool ok = false;
-	if (auto img = rt->newCCImage(true)) {
-		ok = img->saveToFile(geode::utils::string::pathToString(path).c_str(), true);
-		img->release();
-	}
-	std::error_code ec2;
-	if (!ok || !std::filesystem::exists(path, ec2)) {
-		FLAlertLayer::create("Art Agent", "Couldn't save the screenshot. You can also drop any PNG/JPG into the references folder yourself (Dir button in the Art Agent panel).", "OK")->show();
-		return;
-	}
-	FLAlertLayer::create("Art Agent",
-		fmt::format("Saved reference <cy>{}</c>.\nIn the Art Agent panel, type <cy>{}</c> into the Refs box to use it.", name, name),
-		"OK")->show();
+void ArtAgentPopup::onClearImage(CCObject*) {
+	m_imgName.clear(); m_imgMime.clear(); m_imgB64.clear();
+	m_imgLabel->setString("No image");
 }
 
 void ArtAgentPopup::onDiscard(CCObject*) {
@@ -406,19 +358,18 @@ void ArtAgentPopup::request(std::string userMsg) {
 		return parts;
 	};
 
-	// reference screenshots ride along with the FIRST user message (the history is re-sent every time)
-	std::string refNames, refWarn;
-	auto refs = this->refParts(refNames, refWarn);
-
+	// the reference image (if any) rides along with the FIRST user message; the history is re-sent every time
 	auto contents = matjson::Value::array();
 	size_t turn = 0;
 	for (auto& [role, content] : m_history) {
 		auto parts = matjson::Value::array();
-		if (turn == 0 && !refs.empty()) {
-			for (auto& img : refs) parts.push(img);
-			parts.push(matjson::makeObject({{"text", fmt::format(
-				"The {} image(s) above are reference screenshots of levels the player likes ({}). "
-				"Use them as style reference.", refs.size(), refNames)}}));
+		if (turn == 0 && !m_imgB64.empty()) {
+			parts.push(matjson::makeObject({{"inlineData", matjson::makeObject({
+				{"mimeType", m_imgMime},
+				{"data", m_imgB64},
+			})}}));
+			parts.push(matjson::makeObject({{"text",
+				"The image above is a reference screenshot of a look the player likes. Use it as a style reference."}}));
 		}
 		parts.push(matjson::makeObject({{"text", content}}));
 		contents.push(matjson::makeObject({
@@ -460,7 +411,7 @@ void ArtAgentPopup::request(std::string userMsg) {
 	auto url = fmt::format("https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent", model);
 
 	m_busy = true;
-	this->say(refWarn.empty() ? std::string("Thinking...") : "Thinking... " + refWarn);
+	this->say("Thinking...");
 
 	web::WebRequest req;
 	req.header("x-goog-api-key", key);
