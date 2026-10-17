@@ -1,0 +1,2005 @@
+{
+ "version": 1,
+ "objects": [
+  {
+   "id": 62,
+   "role": "edge",
+   "w": 1.0,
+   "h": 0.533,
+   "tags": [
+    "white",
+    "smooth",
+    "gray"
+   ],
+   "facing": "down"
+  },
+  {
+   "id": 65,
+   "role": "edge",
+   "w": 1.0,
+   "h": 0.533,
+   "tags": [
+    "white",
+    "smooth",
+    "gray"
+   ],
+   "facing": "down"
+  },
+  {
+   "id": 66,
+   "role": "edge",
+   "w": 1.0,
+   "h": 0.533,
+   "tags": [
+    "white",
+    "smooth",
+    "gray"
+   ],
+   "facing": "down"
+  },
+  {
+   "id": 68,
+   "role": "edge",
+   "w": 1.0,
+   "h": 0.533,
+   "tags": [
+    "white",
+    "smooth",
+    "gray"
+   ],
+   "facing": "down"
+  },
+  {
+   "id": 158,
+   "role": "edge",
+   "w": 1.0,
+   "h": 0.867,
+   "tags": [
+    "white",
+    "gradient",
+    "smooth"
+   ],
+   "facing": "left"
+  },
+  {
+   "id": 159,
+   "role": "edge",
+   "w": 1.0,
+   "h": 0.85,
+   "tags": [
+    "white",
+    "gradient",
+    "smooth"
+   ],
+   "facing": "up"
+  },
+  {
+   "id": 171,
+   "role": "edge",
+   "w": 1.0,
+   "h": 0.717,
+   "tags": [
+    "tech",
+    "metal",
+    "gray",
+    "dark"
+   ],
+   "facing": "right"
+  },
+  {
+   "id": 172,
+   "role": "edge",
+   "w": 1.0,
+   "h": 0.717,
+   "tags": [
+    "tech",
+    "metal",
+    "gray",
+    "dark"
+   ],
+   "facing": "up"
+  },
+  {
+   "id": 368,
+   "role": "edge",
+   "w": 1.008,
+   "h": 0.317,
+   "tags": [
+    "white",
+    "smooth",
+    "round"
+   ],
+   "facing": "up"
+  },
+  {
+   "id": 448,
+   "role": "edge",
+   "w": 1.0,
+   "h": 0.817,
+   "tags": [
+    "white",
+    "smooth",
+    "gradient"
+   ],
+   "facing": "up"
+  },
+  {
+   "id": 449,
+   "role": "edge",
+   "w": 1.0,
+   "h": 0.817,
+   "tags": [
+    "white",
+    "smooth",
+    "gradient"
+   ],
+   "facing": "up"
+  },
+  {
+   "id": 507,
+   "role": "edge",
+   "w": 1.0,
+   "h": 0.333,
+   "tags": [
+    "white",
+    "outline",
+    "sharp"
+   ],
+   "facing": "down"
+  },
+  {
+   "id": 508,
+   "role": "edge",
+   "w": 0.5,
+   "h": 0.333,
+   "tags": [
+    "white",
+    "outline",
+    "sharp"
+   ],
+   "facing": "down"
+  },
+  {
+   "id": 516,
+   "role": "edge",
+   "w": 1.0,
+   "h": 0.333,
+   "tags": [
+    "white",
+    "outline",
+    "sharp"
+   ],
+   "facing": "down"
+  },
+  {
+   "id": 517,
+   "role": "edge",
+   "w": 0.5,
+   "h": 0.333,
+   "tags": [
+    "white",
+    "outline",
+    "sharp"
+   ],
+   "facing": "down"
+  },
+  {
+   "id": 525,
+   "role": "edge",
+   "w": 1.0,
+   "h": 0.333,
+   "tags": [
+    "white",
+    "outline",
+    "sharp"
+   ],
+   "facing": "down"
+  },
+  {
+   "id": 526,
+   "role": "edge",
+   "w": 0.5,
+   "h": 0.333,
+   "tags": [
+    "white",
+    "outline",
+    "sharp"
+   ],
+   "facing": "down"
+  },
+  {
+   "id": 534,
+   "role": "edge",
+   "w": 1.0,
+   "h": 0.333,
+   "tags": [
+    "white",
+    "outline",
+    "sharp"
+   ],
+   "facing": "down"
+  },
+  {
+   "id": 535,
+   "role": "edge",
+   "w": 0.5,
+   "h": 0.333,
+   "tags": [
+    "white",
+    "outline",
+    "sharp"
+   ],
+   "facing": "down"
+  },
+  {
+   "id": 543,
+   "role": "edge",
+   "w": 1.0,
+   "h": 0.333,
+   "tags": [
+    "white",
+    "outline",
+    "sharp"
+   ],
+   "facing": "down"
+  },
+  {
+   "id": 544,
+   "role": "edge",
+   "w": 0.5,
+   "h": 0.333,
+   "tags": [
+    "white",
+    "outline",
+    "sharp"
+   ],
+   "facing": "down"
+  },
+  {
+   "id": 552,
+   "role": "edge",
+   "w": 1.0,
+   "h": 0.333,
+   "tags": [
+    "white",
+    "outline",
+    "sharp"
+   ],
+   "facing": "down"
+  },
+  {
+   "id": 553,
+   "role": "edge",
+   "w": 0.5,
+   "h": 0.333,
+   "tags": [
+    "white",
+    "outline",
+    "sharp"
+   ],
+   "facing": "down"
+  },
+  {
+   "id": 561,
+   "role": "edge",
+   "w": 1.0,
+   "h": 0.333,
+   "tags": [
+    "white",
+    "outline",
+    "sharp"
+   ],
+   "facing": "down"
+  },
+  {
+   "id": 562,
+   "role": "edge",
+   "w": 0.5,
+   "h": 0.333,
+   "tags": [
+    "white",
+    "outline",
+    "sharp"
+   ],
+   "facing": "down"
+  },
+  {
+   "id": 570,
+   "role": "edge",
+   "w": 1.0,
+   "h": 0.333,
+   "tags": [
+    "white",
+    "outline",
+    "sharp"
+   ],
+   "facing": "down"
+  },
+  {
+   "id": 641,
+   "role": "edge",
+   "w": 1.0,
+   "h": 1.0,
+   "tags": [
+    "dark",
+    "tech",
+    "geometric",
+    "gray"
+   ],
+   "facing": "down"
+  },
+  {
+   "id": 775,
+   "role": "edge",
+   "w": 1.0,
+   "h": 1.0,
+   "tags": [
+    "dark",
+    "geometric",
+    "gray",
+    "sharp"
+   ],
+   "facing": "down"
+  },
+  {
+   "id": 843,
+   "role": "edge",
+   "w": 1.0,
+   "h": 1.0,
+   "tags": [
+    "tech",
+    "metal",
+    "gray",
+    "light"
+   ],
+   "facing": "down"
+  },
+  {
+   "id": 844,
+   "role": "edge",
+   "w": 1.0,
+   "h": 1.0,
+   "tags": [
+    "tech",
+    "metal",
+    "gray",
+    "light"
+   ],
+   "facing": "down"
+  },
+  {
+   "id": 973,
+   "role": "edge",
+   "w": 1.0,
+   "h": 1.0,
+   "tags": [
+    "light",
+    "geometric",
+    "gray",
+    "sharp"
+   ],
+   "facing": "down"
+  },
+  {
+   "id": 1046,
+   "role": "edge",
+   "w": 1.0,
+   "h": 0.167,
+   "tags": [
+    "dark",
+    "geometric",
+    "gray",
+    "sharp"
+   ],
+   "facing": "up"
+  },
+  {
+   "id": 1048,
+   "role": "edge",
+   "w": 1.0,
+   "h": 0.167,
+   "tags": [
+    "light",
+    "geometric",
+    "gray",
+    "sharp"
+   ],
+   "facing": "up"
+  },
+  {
+   "id": 1075,
+   "role": "edge",
+   "w": 1.0,
+   "h": 1.0,
+   "tags": [
+    "dark",
+    "tech",
+    "geometric",
+    "gray"
+   ],
+   "facing": "down"
+  },
+  {
+   "id": 1162,
+   "role": "edge",
+   "w": 1.0,
+   "h": 1.0,
+   "tags": [
+    "light",
+    "geometric",
+    "gray",
+    "smooth"
+   ],
+   "facing": "up"
+  },
+  {
+   "id": 1164,
+   "role": "edge",
+   "w": 0.5,
+   "h": 1.0,
+   "tags": [
+    "light",
+    "geometric",
+    "gray",
+    "smooth"
+   ],
+   "facing": "up"
+  },
+  {
+   "id": 1176,
+   "role": "edge",
+   "w": 1.0,
+   "h": 0.5,
+   "tags": [
+    "light",
+    "geometric",
+    "gray",
+    "smooth"
+   ],
+   "facing": "left"
+  },
+  {
+   "id": 1357,
+   "role": "edge",
+   "w": 0.567,
+   "h": 1.3,
+   "tags": [
+    "stone",
+    "rough",
+    "white",
+    "gray"
+   ],
+   "facing": "right"
+  },
+  {
+   "id": 1359,
+   "role": "edge",
+   "w": 1.017,
+   "h": 0.5,
+   "tags": [
+    "stone",
+    "rough",
+    "white",
+    "gray"
+   ],
+   "facing": "up"
+  },
+  {
+   "id": 1395,
+   "role": "edge",
+   "w": 0.417,
+   "h": 1.3,
+   "tags": [
+    "stone",
+    "rough",
+    "white",
+    "gray"
+   ],
+   "facing": "left"
+  },
+  {
+   "id": 1621,
+   "role": "edge",
+   "w": 0.333,
+   "h": 1.0,
+   "tags": [
+    "stone",
+    "rough",
+    "white",
+    "gray"
+   ],
+   "facing": "left"
+  },
+  {
+   "id": 1622,
+   "role": "edge",
+   "w": 0.333,
+   "h": 1.0,
+   "tags": [
+    "stone",
+    "rough",
+    "white",
+    "gray"
+   ],
+   "facing": "left"
+  },
+  {
+   "id": 1623,
+   "role": "edge",
+   "w": 0.333,
+   "h": 1.0,
+   "tags": [
+    "stone",
+    "rough",
+    "white",
+    "gray"
+   ],
+   "facing": "left"
+  },
+  {
+   "id": 1624,
+   "role": "edge",
+   "w": 0.333,
+   "h": 1.0,
+   "tags": [
+    "stone",
+    "rough",
+    "white",
+    "gray"
+   ],
+   "facing": "left"
+  },
+  {
+   "id": 1625,
+   "role": "edge",
+   "w": 0.267,
+   "h": 1.0,
+   "tags": [
+    "stone",
+    "rough",
+    "white",
+    "gray"
+   ],
+   "facing": "right"
+  },
+  {
+   "id": 1626,
+   "role": "edge",
+   "w": 0.267,
+   "h": 1.0,
+   "tags": [
+    "stone",
+    "rough",
+    "white",
+    "gray"
+   ],
+   "facing": "right"
+  },
+  {
+   "id": 1627,
+   "role": "edge",
+   "w": 0.267,
+   "h": 1.0,
+   "tags": [
+    "stone",
+    "rough",
+    "white",
+    "gray"
+   ],
+   "facing": "right"
+  },
+  {
+   "id": 1628,
+   "role": "edge",
+   "w": 0.267,
+   "h": 1.0,
+   "tags": [
+    "stone",
+    "rough",
+    "gray",
+    "dark"
+   ],
+   "facing": "right"
+  },
+  {
+   "id": 1629,
+   "role": "edge",
+   "w": 1.0,
+   "h": 0.4,
+   "tags": [
+    "stone",
+    "rough",
+    "white",
+    "gray"
+   ],
+   "facing": "up"
+  },
+  {
+   "id": 1630,
+   "role": "edge",
+   "w": 1.0,
+   "h": 0.4,
+   "tags": [
+    "stone",
+    "rough",
+    "white",
+    "gray"
+   ],
+   "facing": "up"
+  },
+  {
+   "id": 1631,
+   "role": "edge",
+   "w": 1.0,
+   "h": 0.4,
+   "tags": [
+    "stone",
+    "rough",
+    "white",
+    "gray"
+   ],
+   "facing": "up"
+  },
+  {
+   "id": 1632,
+   "role": "edge",
+   "w": 1.0,
+   "h": 0.4,
+   "tags": [
+    "stone",
+    "rough",
+    "white",
+    "gray"
+   ],
+   "facing": "up"
+  },
+  {
+   "id": 1633,
+   "role": "edge",
+   "w": 1.0,
+   "h": 0.333,
+   "tags": [
+    "stone",
+    "rough",
+    "gray",
+    "dark"
+   ],
+   "facing": "down"
+  },
+  {
+   "id": 1634,
+   "role": "edge",
+   "w": 1.0,
+   "h": 0.333,
+   "tags": [
+    "stone",
+    "rough",
+    "gray",
+    "dark"
+   ],
+   "facing": "down"
+  },
+  {
+   "id": 1635,
+   "role": "edge",
+   "w": 1.0,
+   "h": 0.333,
+   "tags": [
+    "stone",
+    "rough",
+    "gray",
+    "dark"
+   ],
+   "facing": "down"
+  },
+  {
+   "id": 1636,
+   "role": "edge",
+   "w": 1.0,
+   "h": 0.333,
+   "tags": [
+    "stone",
+    "rough",
+    "gray",
+    "dark"
+   ],
+   "facing": "down"
+  },
+  {
+   "id": 2711,
+   "role": "edge",
+   "w": 1.0,
+   "h": 0.217,
+   "tags": [
+    "light",
+    "smooth",
+    "gray"
+   ],
+   "facing": "right"
+  },
+  {
+   "id": 2729,
+   "role": "edge",
+   "w": 1.0,
+   "h": 0.217,
+   "tags": [
+    "light",
+    "smooth",
+    "gray"
+   ],
+   "facing": "left"
+  },
+  {
+   "id": 2765,
+   "role": "edge",
+   "w": 1.0,
+   "h": 0.217,
+   "tags": [
+    "light",
+    "smooth",
+    "gray"
+   ],
+   "facing": "right"
+  },
+  {
+   "id": 2799,
+   "role": "edge",
+   "w": 0.217,
+   "h": 1.0,
+   "tags": [
+    "light",
+    "smooth",
+    "gray"
+   ],
+   "facing": "up"
+  },
+  {
+   "id": 15,
+   "role": "scatter",
+   "w": 0.217,
+   "h": 1.4,
+   "tags": [
+    "dark",
+    "metal",
+    "chain"
+   ]
+  },
+  {
+   "id": 16,
+   "role": "scatter",
+   "w": 0.2,
+   "h": 0.883,
+   "tags": [
+    "dark",
+    "metal",
+    "pipe"
+   ]
+  },
+  {
+   "id": 17,
+   "role": "scatter",
+   "w": 0.183,
+   "h": 0.417,
+   "tags": [
+    "dark",
+    "metal",
+    "pipe"
+   ]
+  },
+  {
+   "id": 41,
+   "role": "scatter",
+   "w": 0.65,
+   "h": 2.317,
+   "tags": [
+    "chain",
+    "metal",
+    "gray"
+   ]
+  },
+  {
+   "id": 48,
+   "role": "scatter",
+   "w": 3.833,
+   "h": 1.283,
+   "tags": [
+    "cloud",
+    "sky",
+    "white",
+    "smooth"
+   ]
+  },
+  {
+   "id": 49,
+   "role": "scatter",
+   "w": 2.667,
+   "h": 1.067,
+   "tags": [
+    "cloud",
+    "sky",
+    "white",
+    "smooth"
+   ]
+  },
+  {
+   "id": 50,
+   "role": "scatter",
+   "w": 1.0,
+   "h": 1.0,
+   "tags": [
+    "round",
+    "white",
+    "smooth"
+   ]
+  },
+  {
+   "id": 51,
+   "role": "scatter",
+   "w": 1.0,
+   "h": 1.0,
+   "tags": [
+    "round",
+    "white",
+    "outline"
+   ]
+  },
+  {
+   "id": 52,
+   "role": "scatter",
+   "w": 1.0,
+   "h": 0.833,
+   "tags": [
+    "white",
+    "round",
+    "smooth"
+   ]
+  },
+  {
+   "id": 53,
+   "role": "scatter",
+   "w": 1.0,
+   "h": 1.0,
+   "tags": [
+    "white",
+    "geometric",
+    "sharp"
+   ]
+  },
+  {
+   "id": 54,
+   "role": "scatter",
+   "w": 1.0,
+   "h": 0.95,
+   "tags": [
+    "white",
+    "star",
+    "sharp"
+   ]
+  },
+  {
+   "id": 60,
+   "role": "scatter",
+   "w": 1.083,
+   "h": 1.0,
+   "tags": [
+    "white",
+    "round",
+    "smooth"
+   ]
+  },
+  {
+   "id": 63,
+   "role": "scatter",
+   "w": 1.0,
+   "h": 1.0,
+   "tags": [
+    "white",
+    "smooth",
+    "gray"
+   ]
+  },
+  {
+   "id": 87,
+   "role": "scatter",
+   "w": 1.25,
+   "h": 1.25,
+   "tags": [
+    "gear",
+    "metal",
+    "white"
+   ]
+  },
+  {
+   "id": 97,
+   "role": "scatter",
+   "w": 0.833,
+   "h": 0.85,
+   "tags": [
+    "gear",
+    "metal",
+    "white",
+    "round"
+   ]
+  },
+  {
+   "id": 106,
+   "role": "scatter",
+   "w": 0.9,
+   "h": 2.183,
+   "tags": [
+    "chain",
+    "metal",
+    "gray"
+   ]
+  },
+  {
+   "id": 107,
+   "role": "scatter",
+   "w": 0.9,
+   "h": 1.267,
+   "tags": [
+    "chain",
+    "metal",
+    "gray"
+   ]
+  },
+  {
+   "id": 110,
+   "role": "scatter",
+   "w": 0.65,
+   "h": 1.133,
+   "tags": [
+    "chain",
+    "metal",
+    "gray"
+   ]
+  },
+  {
+   "id": 129,
+   "role": "scatter",
+   "w": 2.633,
+   "h": 1.05,
+   "tags": [
+    "cloud",
+    "sky",
+    "white",
+    "smooth"
+   ]
+  },
+  {
+   "id": 130,
+   "role": "scatter",
+   "w": 3.817,
+   "h": 1.467,
+   "tags": [
+    "cloud",
+    "sky",
+    "white",
+    "smooth"
+   ]
+  },
+  {
+   "id": 131,
+   "role": "scatter",
+   "w": 1.267,
+   "h": 0.6,
+   "tags": [
+    "cloud",
+    "sky",
+    "white",
+    "smooth"
+   ]
+  },
+  {
+   "id": 139,
+   "role": "scatter",
+   "w": 0.917,
+   "h": 0.9,
+   "tags": [
+    "gear",
+    "metal",
+    "white",
+    "round"
+   ]
+  },
+  {
+   "id": 181,
+   "role": "scatter",
+   "w": 1.208,
+   "h": 1.2,
+   "tags": [
+    "gear",
+    "metal",
+    "white",
+    "round"
+   ]
+  },
+  {
+   "id": 242,
+   "role": "scatter",
+   "w": 1.0,
+   "h": 1.0,
+   "tags": [
+    "light",
+    "tech",
+    "geometric",
+    "gray"
+   ]
+  },
+  {
+   "id": 406,
+   "role": "scatter",
+   "w": 0.45,
+   "h": 0.467,
+   "tags": [
+    "plant",
+    "organic",
+    "white",
+    "sharp"
+   ]
+  },
+  {
+   "id": 407,
+   "role": "scatter",
+   "w": 0.367,
+   "h": 0.283,
+   "tags": [
+    "plant",
+    "organic",
+    "white",
+    "sharp"
+   ]
+  },
+  {
+   "id": 408,
+   "role": "scatter",
+   "w": 0.183,
+   "h": 0.2,
+   "tags": [
+    "plant",
+    "organic",
+    "white",
+    "sharp"
+   ]
+  },
+  {
+   "id": 414,
+   "role": "scatter",
+   "w": 0.45,
+   "h": 0.45,
+   "tags": [
+    "plant",
+    "organic",
+    "white",
+    "sharp"
+   ]
+  },
+  {
+   "id": 453,
+   "role": "scatter",
+   "w": 0.433,
+   "h": 1.0,
+   "tags": [
+    "dark",
+    "tech",
+    "round",
+    "black"
+   ]
+  },
+  {
+   "id": 454,
+   "role": "scatter",
+   "w": 1.0,
+   "h": 1.0,
+   "tags": [
+    "dark",
+    "tech",
+    "round",
+    "black"
+   ]
+  },
+  {
+   "id": 497,
+   "role": "scatter",
+   "w": 1.667,
+   "h": 1.667,
+   "tags": [
+    "round",
+    "white",
+    "smooth"
+   ]
+  },
+  {
+   "id": 842,
+   "role": "scatter",
+   "w": 1.0,
+   "h": 1.0,
+   "tags": [
+    "tech",
+    "metal",
+    "gray",
+    "black"
+   ]
+  },
+  {
+   "id": 845,
+   "role": "scatter",
+   "w": 1.0,
+   "h": 1.0,
+   "tags": [
+    "tech",
+    "metal",
+    "gray",
+    "black"
+   ]
+  },
+  {
+   "id": 906,
+   "role": "scatter",
+   "w": 0.833,
+   "h": 0.683,
+   "tags": [
+    "plant",
+    "organic",
+    "white",
+    "sharp"
+   ]
+  },
+  {
+   "id": 931,
+   "role": "scatter",
+   "w": 1.0,
+   "h": 1.0,
+   "tags": [
+    "green",
+    "geometric",
+    "neon"
+   ]
+  },
+  {
+   "id": 935,
+   "role": "scatter",
+   "w": 1.0,
+   "h": 1.0,
+   "tags": [
+    "green",
+    "geometric",
+    "neon"
+   ]
+  },
+  {
+   "id": 956,
+   "role": "scatter",
+   "w": 0.467,
+   "h": 1.0,
+   "tags": [
+    "light",
+    "geometric",
+    "gray",
+    "sharp"
+   ]
+  },
+  {
+   "id": 957,
+   "role": "scatter",
+   "w": 0.467,
+   "h": 1.0,
+   "tags": [
+    "light",
+    "geometric",
+    "gray",
+    "sharp"
+   ]
+  },
+  {
+   "id": 959,
+   "role": "scatter",
+   "w": 0.4,
+   "h": 0.4,
+   "tags": [
+    "light",
+    "geometric",
+    "gray",
+    "sharp"
+   ]
+  },
+  {
+   "id": 1229,
+   "role": "scatter",
+   "w": 1.0,
+   "h": 1.0,
+   "tags": [
+    "green",
+    "geometric",
+    "neon"
+   ]
+  },
+  {
+   "id": 1230,
+   "role": "scatter",
+   "w": 1.0,
+   "h": 1.0,
+   "tags": [
+    "green",
+    "geometric",
+    "neon"
+   ]
+  },
+  {
+   "id": 1231,
+   "role": "scatter",
+   "w": 1.0,
+   "h": 1.0,
+   "tags": [
+    "green",
+    "geometric",
+    "neon"
+   ]
+  },
+  {
+   "id": 1275,
+   "role": "scatter",
+   "w": 1.0,
+   "h": 0.7,
+   "tags": [
+    "gold",
+    "metal",
+    "white",
+    "outline"
+   ]
+  },
+  {
+   "id": 1276,
+   "role": "scatter",
+   "w": 0.733,
+   "h": 1.0,
+   "tags": [
+    "metal",
+    "white",
+    "black",
+    "outline"
+   ]
+  },
+  {
+   "id": 1348,
+   "role": "scatter",
+   "w": 1.117,
+   "h": 1.317,
+   "tags": [
+    "stone",
+    "rough",
+    "white",
+    "gray"
+   ]
+  },
+  {
+   "id": 1349,
+   "role": "scatter",
+   "w": 1.017,
+   "h": 1.3,
+   "tags": [
+    "stone",
+    "rough",
+    "white",
+    "gray"
+   ]
+  },
+  {
+   "id": 1350,
+   "role": "scatter",
+   "w": 1.017,
+   "h": 1.017,
+   "tags": [
+    "stone",
+    "rough",
+    "white",
+    "gray"
+   ]
+  },
+  {
+   "id": 1351,
+   "role": "scatter",
+   "w": 1.2,
+   "h": 1.233,
+   "tags": [
+    "stone",
+    "rough",
+    "white",
+    "gray"
+   ]
+  },
+  {
+   "id": 1356,
+   "role": "scatter",
+   "w": 0.417,
+   "h": 1.017,
+   "tags": [
+    "stone",
+    "rough",
+    "white",
+    "gray"
+   ]
+  },
+  {
+   "id": 1590,
+   "role": "scatter",
+   "w": 0.85,
+   "h": 0.833,
+   "tags": [
+    "black",
+    "white",
+    "gray",
+    "outline"
+   ]
+  },
+  {
+   "id": 1600,
+   "role": "scatter",
+   "w": 0.967,
+   "h": 0.8,
+   "tags": [
+    "wood",
+    "white",
+    "gray",
+    "outline"
+   ]
+  },
+  {
+   "id": 1601,
+   "role": "scatter",
+   "w": 0.267,
+   "h": 1.333,
+   "tags": [
+    "wood",
+    "white",
+    "black",
+    "outline"
+   ]
+  },
+  {
+   "id": 1843,
+   "role": "scatter",
+   "w": 1.0,
+   "h": 0.333,
+   "tags": [
+    "wood",
+    "white",
+    "black",
+    "outline"
+   ]
+  },
+  {
+   "id": 2991,
+   "role": "scatter",
+   "w": 0.85,
+   "h": 1.133,
+   "tags": [
+    "metal",
+    "gray",
+    "smooth",
+    "sharp"
+   ]
+  },
+  {
+   "id": 2992,
+   "role": "scatter",
+   "w": 0.567,
+   "h": 1.25,
+   "tags": [
+    "metal",
+    "gray",
+    "smooth",
+    "sharp"
+   ]
+  },
+  {
+   "id": 2993,
+   "role": "scatter",
+   "w": 0.267,
+   "h": 0.883,
+   "tags": [
+    "metal",
+    "gray",
+    "smooth",
+    "sharp"
+   ]
+  },
+  {
+   "id": 3086,
+   "role": "scatter",
+   "w": 0.933,
+   "h": 0.833,
+   "tags": [
+    "crystal",
+    "white",
+    "sharp",
+    "light"
+   ]
+  },
+  {
+   "id": 3087,
+   "role": "scatter",
+   "w": 1.033,
+   "h": 0.933,
+   "tags": [
+    "crystal",
+    "white",
+    "outline",
+    "sharp"
+   ]
+  },
+  {
+   "id": 3088,
+   "role": "scatter",
+   "w": 0.967,
+   "h": 0.667,
+   "tags": [
+    "crystal",
+    "white",
+    "sharp",
+    "light"
+   ]
+  },
+  {
+   "id": 3089,
+   "role": "scatter",
+   "w": 1.067,
+   "h": 0.75,
+   "tags": [
+    "crystal",
+    "white",
+    "outline",
+    "sharp"
+   ]
+  },
+  {
+   "id": 85,
+   "role": "focal",
+   "w": 2.333,
+   "h": 2.333,
+   "tags": [
+    "gear",
+    "metal",
+    "white",
+    "sharp"
+   ]
+  },
+  {
+   "id": 86,
+   "role": "focal",
+   "w": 1.783,
+   "h": 1.817,
+   "tags": [
+    "gear",
+    "metal",
+    "white",
+    "round"
+   ]
+  },
+  {
+   "id": 137,
+   "role": "focal",
+   "w": 2.667,
+   "h": 2.667,
+   "tags": [
+    "gear",
+    "metal",
+    "white",
+    "round"
+   ]
+  },
+  {
+   "id": 138,
+   "role": "focal",
+   "w": 1.7,
+   "h": 1.7,
+   "tags": [
+    "gear",
+    "metal",
+    "white",
+    "round"
+   ]
+  },
+  {
+   "id": 154,
+   "role": "focal",
+   "w": 2.317,
+   "h": 2.317,
+   "tags": [
+    "white",
+    "sharp",
+    "metal",
+    "gear"
+   ]
+  },
+  {
+   "id": 155,
+   "role": "focal",
+   "w": 1.567,
+   "h": 1.8,
+   "tags": [
+    "white",
+    "sharp",
+    "metal",
+    "gear"
+   ]
+  },
+  {
+   "id": 180,
+   "role": "focal",
+   "w": 1.792,
+   "h": 1.792,
+   "tags": [
+    "gear",
+    "metal",
+    "white",
+    "round"
+   ]
+  },
+  {
+   "id": 394,
+   "role": "focal",
+   "w": 2.675,
+   "h": 2.333,
+   "tags": [
+    "white",
+    "geometric",
+    "smooth",
+    "light"
+   ]
+  },
+  {
+   "id": 450,
+   "role": "focal",
+   "w": 1.583,
+   "h": 2.0,
+   "tags": [
+    "white",
+    "geometric",
+    "gradient",
+    "stone"
+   ]
+  },
+  {
+   "id": 451,
+   "role": "focal",
+   "w": 1.2,
+   "h": 1.283,
+   "tags": [
+    "white",
+    "geometric",
+    "gradient",
+    "stone"
+   ]
+  },
+  {
+   "id": 1596,
+   "role": "focal",
+   "w": 0.65,
+   "h": 0.55,
+   "tags": [
+    "skull",
+    "spooky",
+    "white",
+    "black"
+   ]
+  },
+  {
+   "id": 1597,
+   "role": "focal",
+   "w": 0.6,
+   "h": 0.533,
+   "tags": [
+    "skull",
+    "spooky",
+    "white",
+    "black"
+   ]
+  },
+  {
+   "id": 1598,
+   "role": "focal",
+   "w": 0.867,
+   "h": 0.9,
+   "tags": [
+    "skull",
+    "spooky",
+    "white",
+    "gray",
+    "black"
+   ]
+  },
+  {
+   "id": 1599,
+   "role": "focal",
+   "w": 0.85,
+   "h": 0.867,
+   "tags": [
+    "skull",
+    "spooky",
+    "black",
+    "white"
+   ]
+  },
+  {
+   "id": 1602,
+   "role": "focal",
+   "w": 0.517,
+   "h": 0.517,
+   "tags": [
+    "skull",
+    "spooky",
+    "white",
+    "black"
+   ]
+  },
+  {
+   "id": 2,
+   "role": "fill",
+   "w": 1.0,
+   "h": 1.0,
+   "tags": [
+    "dark",
+    "tech",
+    "geometric",
+    "pattern",
+    "gray"
+   ]
+  },
+  {
+   "id": 3,
+   "role": "fill",
+   "w": 1.0,
+   "h": 1.0,
+   "tags": [
+    "dark",
+    "tech",
+    "geometric",
+    "pattern",
+    "gray"
+   ]
+  },
+  {
+   "id": 4,
+   "role": "fill",
+   "w": 1.0,
+   "h": 1.0,
+   "tags": [
+    "dark",
+    "tech",
+    "geometric",
+    "pattern",
+    "gray"
+   ]
+  },
+  {
+   "id": 5,
+   "role": "fill",
+   "w": 1.0,
+   "h": 1.0,
+   "tags": [
+    "dark",
+    "tech",
+    "geometric",
+    "pattern",
+    "gray"
+   ]
+  },
+  {
+   "id": 6,
+   "role": "fill",
+   "w": 1.0,
+   "h": 1.0,
+   "tags": [
+    "dark",
+    "tech",
+    "geometric",
+    "pattern",
+    "black"
+   ]
+  },
+  {
+   "id": 143,
+   "role": "fill",
+   "w": 1.0,
+   "h": 1.0,
+   "tags": [
+    "brick",
+    "stone",
+    "gray",
+    "pattern"
+   ]
+  },
+  {
+   "id": 233,
+   "role": "fill",
+   "w": 1.0,
+   "h": 1.0,
+   "tags": [
+    "light",
+    "tech",
+    "geometric",
+    "pattern",
+    "gray"
+   ]
+  },
+  {
+   "id": 251,
+   "role": "fill",
+   "w": 1.0,
+   "h": 1.0,
+   "tags": [
+    "light",
+    "tech",
+    "geometric",
+    "pattern",
+    "gray"
+   ]
+  },
+  {
+   "id": 259,
+   "role": "fill",
+   "w": 1.0,
+   "h": 1.0,
+   "tags": [
+    "light",
+    "geometric",
+    "pattern",
+    "white"
+   ]
+  },
+  {
+   "id": 273,
+   "role": "fill",
+   "w": 1.0,
+   "h": 1.0,
+   "tags": [
+    "light",
+    "tech",
+    "geometric",
+    "pattern",
+    "gray"
+   ]
+  },
+  {
+   "id": 279,
+   "role": "fill",
+   "w": 1.0,
+   "h": 1.0,
+   "tags": [
+    "light",
+    "smooth",
+    "white",
+    "gray"
+   ]
+  },
+  {
+   "id": 867,
+   "role": "fill",
+   "w": 1.0,
+   "h": 1.0,
+   "tags": [
+    "brick",
+    "stone",
+    "white",
+    "gray",
+    "pattern"
+   ]
+  },
+  {
+   "id": 868,
+   "role": "fill",
+   "w": 1.0,
+   "h": 1.0,
+   "tags": [
+    "brick",
+    "stone",
+    "white",
+    "gray",
+    "pattern"
+   ]
+  },
+  {
+   "id": 869,
+   "role": "fill",
+   "w": 1.0,
+   "h": 1.0,
+   "tags": [
+    "brick",
+    "stone",
+    "white",
+    "gray",
+    "pattern"
+   ]
+  },
+  {
+   "id": 927,
+   "role": "fill",
+   "w": 1.0,
+   "h": 1.0,
+   "tags": [
+    "colorful",
+    "pattern",
+    "geometric"
+   ]
+  },
+  {
+   "id": 930,
+   "role": "fill",
+   "w": 1.0,
+   "h": 1.0,
+   "tags": [
+    "colorful",
+    "pattern",
+    "geometric"
+   ]
+  },
+  {
+   "id": 934,
+   "role": "fill",
+   "w": 1.0,
+   "h": 1.0,
+   "tags": [
+    "colorful",
+    "pattern",
+    "geometric"
+   ]
+  },
+  {
+   "id": 1352,
+   "role": "fill",
+   "w": 1.0,
+   "h": 1.0,
+   "tags": [
+    "stone",
+    "rough",
+    "gray",
+    "pattern"
+   ]
+  },
+  {
+   "id": 1353,
+   "role": "fill",
+   "w": 1.0,
+   "h": 1.0,
+   "tags": [
+    "stone",
+    "rough",
+    "gray",
+    "pattern"
+   ]
+  },
+  {
+   "id": 1354,
+   "role": "fill",
+   "w": 1.0,
+   "h": 1.0,
+   "tags": [
+    "stone",
+    "rough",
+    "gray",
+    "pattern"
+   ]
+  },
+  {
+   "id": 1355,
+   "role": "fill",
+   "w": 1.0,
+   "h": 1.0,
+   "tags": [
+    "stone",
+    "rough",
+    "gray",
+    "pattern"
+   ]
+  },
+  {
+   "id": 1431,
+   "role": "fill",
+   "w": 1.0,
+   "h": 1.0,
+   "tags": [
+    "stone",
+    "rough",
+    "gray",
+    "pattern"
+   ]
+  },
+  {
+   "id": 1878,
+   "role": "fill",
+   "w": 1.0,
+   "h": 1.0,
+   "tags": [
+    "wood",
+    "light",
+    "rough",
+    "pattern"
+   ]
+  },
+  {
+   "id": 1879,
+   "role": "fill",
+   "w": 1.0,
+   "h": 1.0,
+   "tags": [
+    "wood",
+    "light",
+    "rough",
+    "pattern"
+   ]
+  },
+  {
+   "id": 1880,
+   "role": "fill",
+   "w": 1.0,
+   "h": 1.0,
+   "tags": [
+    "wood",
+    "light",
+    "rough",
+    "pattern"
+   ]
+  },
+  {
+   "id": 1881,
+   "role": "fill",
+   "w": 1.0,
+   "h": 1.0,
+   "tags": [
+    "wood",
+    "light",
+    "rough",
+    "pattern"
+   ]
+  },
+  {
+   "id": 2987,
+   "role": "fill",
+   "w": 1.0,
+   "h": 1.0,
+   "tags": [
+    "metal",
+    "gray",
+    "pattern",
+    "sharp"
+   ]
+  },
+  {
+   "id": 2988,
+   "role": "fill",
+   "w": 1.0,
+   "h": 1.0,
+   "tags": [
+    "metal",
+    "gray",
+    "pattern",
+    "sharp"
+   ]
+  },
+  {
+   "id": 2989,
+   "role": "fill",
+   "w": 1.0,
+   "h": 1.0,
+   "tags": [
+    "metal",
+    "gray",
+    "pattern",
+    "sharp"
+   ]
+  },
+  {
+   "id": 2990,
+   "role": "fill",
+   "w": 1.0,
+   "h": 1.0,
+   "tags": [
+    "metal",
+    "gray",
+    "pattern",
+    "sharp"
+   ]
+  }
+ ]
+}

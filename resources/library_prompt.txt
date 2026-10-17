@@ -1,0 +1,172 @@
+EDGE (id facing WxH tags):
+62 down 1x0.533 white;smooth;gray
+65 down 1x0.533 white;smooth;gray
+66 down 1x0.533 white;smooth;gray
+68 down 1x0.533 white;smooth;gray
+158 left 1x0.867 white;gradient;smooth
+159 up 1x0.85 white;gradient;smooth
+171 right 1x0.717 tech;metal;gray;dark
+172 up 1x0.717 tech;metal;gray;dark
+368 up 1.008x0.317 white;smooth;round
+448 up 1x0.817 white;smooth;gradient
+449 up 1x0.817 white;smooth;gradient
+507 down 1x0.333 white;outline;sharp
+508 down 0.5x0.333 white;outline;sharp
+516 down 1x0.333 white;outline;sharp
+517 down 0.5x0.333 white;outline;sharp
+525 down 1x0.333 white;outline;sharp
+526 down 0.5x0.333 white;outline;sharp
+534 down 1x0.333 white;outline;sharp
+535 down 0.5x0.333 white;outline;sharp
+543 down 1x0.333 white;outline;sharp
+544 down 0.5x0.333 white;outline;sharp
+552 down 1x0.333 white;outline;sharp
+553 down 0.5x0.333 white;outline;sharp
+561 down 1x0.333 white;outline;sharp
+562 down 0.5x0.333 white;outline;sharp
+570 down 1x0.333 white;outline;sharp
+641 down 1x1 dark;tech;geometric;gray
+775 down 1x1 dark;geometric;gray;sharp
+843 down 1x1 tech;metal;gray;light
+844 down 1x1 tech;metal;gray;light
+973 down 1x1 light;geometric;gray;sharp
+1046 up 1x0.167 dark;geometric;gray;sharp
+1048 up 1x0.167 light;geometric;gray;sharp
+1075 down 1x1 dark;tech;geometric;gray
+1162 up 1x1 light;geometric;gray;smooth
+1164 up 0.5x1 light;geometric;gray;smooth
+1176 left 1x0.5 light;geometric;gray;smooth
+1357 right 0.567x1.3 stone;rough;white;gray
+1359 up 1.017x0.5 stone;rough;white;gray
+1395 left 0.417x1.3 stone;rough;white;gray
+1621 left 0.333x1 stone;rough;white;gray
+1622 left 0.333x1 stone;rough;white;gray
+1623 left 0.333x1 stone;rough;white;gray
+1624 left 0.333x1 stone;rough;white;gray
+1625 right 0.267x1 stone;rough;white;gray
+1626 right 0.267x1 stone;rough;white;gray
+1627 right 0.267x1 stone;rough;white;gray
+1628 right 0.267x1 stone;rough;gray;dark
+1629 up 1x0.4 stone;rough;white;gray
+1630 up 1x0.4 stone;rough;white;gray
+1631 up 1x0.4 stone;rough;white;gray
+1632 up 1x0.4 stone;rough;white;gray
+1633 down 1x0.333 stone;rough;gray;dark
+1634 down 1x0.333 stone;rough;gray;dark
+1635 down 1x0.333 stone;rough;gray;dark
+1636 down 1x0.333 stone;rough;gray;dark
+2711 right 1x0.217 light;smooth;gray
+2729 left 1x0.217 light;smooth;gray
+2765 right 1x0.217 light;smooth;gray
+2799 up 0.217x1 light;smooth;gray
+
+SCATTER (id WxH tags):
+15 0.217x1.4 dark;metal;chain
+16 0.2x0.883 dark;metal;pipe
+17 0.183x0.417 dark;metal;pipe
+41 0.65x2.317 chain;metal;gray
+48 3.833x1.283 cloud;sky;white;smooth
+49 2.667x1.067 cloud;sky;white;smooth
+50 1x1 round;white;smooth
+51 1x1 round;white;outline
+52 1x0.833 white;round;smooth
+53 1x1 white;geometric;sharp
+54 1x0.95 white;star;sharp
+60 1.083x1 white;round;smooth
+63 1x1 white;smooth;gray
+87 1.25x1.25 gear;metal;white
+97 0.833x0.85 gear;metal;white;round
+106 0.9x2.183 chain;metal;gray
+107 0.9x1.267 chain;metal;gray
+110 0.65x1.133 chain;metal;gray
+129 2.633x1.05 cloud;sky;white;smooth
+130 3.817x1.467 cloud;sky;white;smooth
+131 1.267x0.6 cloud;sky;white;smooth
+139 0.917x0.9 gear;metal;white;round
+181 1.208x1.2 gear;metal;white;round
+242 1x1 light;tech;geometric;gray
+406 0.45x0.467 plant;organic;white;sharp
+407 0.367x0.283 plant;organic;white;sharp
+408 0.183x0.2 plant;organic;white;sharp
+414 0.45x0.45 plant;organic;white;sharp
+453 0.433x1 dark;tech;round;black
+454 1x1 dark;tech;round;black
+497 1.667x1.667 round;white;smooth
+842 1x1 tech;metal;gray;black
+845 1x1 tech;metal;gray;black
+906 0.833x0.683 plant;organic;white;sharp
+931 1x1 green;geometric;neon
+935 1x1 green;geometric;neon
+956 0.467x1 light;geometric;gray;sharp
+957 0.467x1 light;geometric;gray;sharp
+959 0.4x0.4 light;geometric;gray;sharp
+1229 1x1 green;geometric;neon
+1230 1x1 green;geometric;neon
+1231 1x1 green;geometric;neon
+1275 1x0.7 gold;metal;white;outline
+1276 0.733x1 metal;white;black;outline
+1348 1.117x1.317 stone;rough;white;gray
+1349 1.017x1.3 stone;rough;white;gray
+1350 1.017x1.017 stone;rough;white;gray
+1351 1.2x1.233 stone;rough;white;gray
+1356 0.417x1.017 stone;rough;white;gray
+1590 0.85x0.833 black;white;gray;outline
+1600 0.967x0.8 wood;white;gray;outline
+1601 0.267x1.333 wood;white;black;outline
+1843 1x0.333 wood;white;black;outline
+2991 0.85x1.133 metal;gray;smooth;sharp
+2992 0.567x1.25 metal;gray;smooth;sharp
+2993 0.267x0.883 metal;gray;smooth;sharp
+3086 0.933x0.833 crystal;white;sharp;light
+3087 1.033x0.933 crystal;white;outline;sharp
+3088 0.967x0.667 crystal;white;sharp;light
+3089 1.067x0.75 crystal;white;outline;sharp
+
+FOCAL (id WxH tags):
+85 2.333x2.333 gear;metal;white;sharp
+86 1.783x1.817 gear;metal;white;round
+137 2.667x2.667 gear;metal;white;round
+138 1.7x1.7 gear;metal;white;round
+154 2.317x2.317 white;sharp;metal;gear
+155 1.567x1.8 white;sharp;metal;gear
+180 1.792x1.792 gear;metal;white;round
+394 2.675x2.333 white;geometric;smooth;light
+450 1.583x2 white;geometric;gradient;stone
+451 1.2x1.283 white;geometric;gradient;stone
+1596 0.65x0.55 skull;spooky;white;black
+1597 0.6x0.533 skull;spooky;white;black
+1598 0.867x0.9 skull;spooky;white;gray;black
+1599 0.85x0.867 skull;spooky;black;white
+1602 0.517x0.517 skull;spooky;white;black
+
+FILL (id WxH tags):
+2 1x1 dark;tech;geometric;pattern;gray
+3 1x1 dark;tech;geometric;pattern;gray
+4 1x1 dark;tech;geometric;pattern;gray
+5 1x1 dark;tech;geometric;pattern;gray
+6 1x1 dark;tech;geometric;pattern;black
+143 1x1 brick;stone;gray;pattern
+233 1x1 light;tech;geometric;pattern;gray
+251 1x1 light;tech;geometric;pattern;gray
+259 1x1 light;geometric;pattern;white
+273 1x1 light;tech;geometric;pattern;gray
+279 1x1 light;smooth;white;gray
+867 1x1 brick;stone;white;gray;pattern
+868 1x1 brick;stone;white;gray;pattern
+869 1x1 brick;stone;white;gray;pattern
+927 1x1 colorful;pattern;geometric
+930 1x1 colorful;pattern;geometric
+934 1x1 colorful;pattern;geometric
+1352 1x1 stone;rough;gray;pattern
+1353 1x1 stone;rough;gray;pattern
+1354 1x1 stone;rough;gray;pattern
+1355 1x1 stone;rough;gray;pattern
+1431 1x1 stone;rough;gray;pattern
+1878 1x1 wood;light;rough;pattern
+1879 1x1 wood;light;rough;pattern
+1880 1x1 wood;light;rough;pattern
+1881 1x1 wood;light;rough;pattern
+2987 1x1 metal;gray;pattern;sharp
+2988 1x1 metal;gray;pattern;sharp
+2989 1x1 metal;gray;pattern;sharp
+2990 1x1 metal;gray;pattern;sharp
