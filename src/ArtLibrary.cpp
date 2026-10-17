@@ -44,6 +44,6 @@ bool ArtLibrary::load() {
 			for (auto& tag : t.unwrap()) e.tags.push_back(tag.asString().unwrapOr(""));
 		m_objs[e.id] = e;
 	}
-	log::info("Art Agent: loaded {} library objects", m_objs.size());
+	log::info("Art Agent: loaded {} library objects from {}", m_objs.size(), path.string());
 	return !m_objs.empty();
 }
