@@ -255,17 +255,20 @@ static std::string libraryBlock() {
 	auto& lib = ArtLibrary::get();
 	if (!lib.load()) return "";
 	auto r = geode::utils::file::readString(Mod::get()->getResourcesDir() / "library_prompt.txt");
-	if (r.isErr() || r.unwrap().empty()) return "";
+	if (r.isErr() || r.unwrap().empty()) {
+		log::warn("Art Agent: library_prompt.txt is missing or empty in {}, so Gemini is not told about library layers", Mod::get()->getResourcesDir().string());
+		return "";
+	}
 	return std::string(R"GUIDE(
 
 OPTIONAL "layers": real decoration objects placed ON TOP of the procedural style, to add detail and character. The mod computes every position, rotation and scale; you only choose objects, regions and colors. Add "layers" to the style object when it improves the design; 2 to 4 layers is typical, and omitting them is fine for plain materials.
 "layers":[{"name":"top_trim","kind":"edge","region":"top_edges","objects":[{"id":123,"weight":3},{"id":456}],"color":{"base":"colors[1]","detail":"edge"},"budget":0.08}, {"name":"details","kind":"scatter","region":"interior","objects":[{"id":789}],"density":0.04,"min_spacing":1.5,"color":{"base":"accent"},"budget":0.06}, {"name":"statues","kind":"focal","region":"interior","objects":[{"id":901}],"count":2,"budget":0.03}]
 - kind "edge": pieces laid end to end along exposed surfaces. region is top_edges, bottom_edges, left_edges or right_edges. Use ONLY ids from the EDGE list; the mod rotates each piece so its exposed face points the right way, but pieces whose facing matches the region look best.
-- kind "scatter": small details spread over the structure. region interior (default) or top_edges. density 0.01 to 0.1 per block, min_spacing in blocks (1 to 3). Use ONLY ids from the SCATTER list.
+- kind "scatter": small details spread over the structure. region interior (default) or top_edges. density = objects per block: 0.05 is sparse, 0.12 is normal, 0.2 to 0.3 reads as richly detailed (max 0.3). min_spacing in blocks (0.8 to 3). Use ONLY ids from the SCATTER list.
 - kind "focal": count (1 to 4) large eye-catching pieces. region interior or top_edges. Use ONLY ids from the FOCAL list.
 - color.base / color.detail: "colors[i]" (i = 0 for the darkest), "mortar", "edge" or "accent" (the style's own colors; preferred), or a "#RRGGBB" hex. Use at most 2 hex colors in total across all layers.
 - budget: share of the object limit for that layer (0.02 to 0.15). All layers together are capped at 0.3.
-- Pick pieces whose tags suit the theme. Ids not in the lists below are discarded, so never invent ids. If a list is empty or nothing fits the theme, skip that layer.
+- A convincing design usually combines: one edge layer (trim along the exposed surfaces, including slopes), one scatter layer using 3 to 6 DIFFERENT small pieces at density 0.1 to 0.2 so it does not look repetitive, and optionally 1 to 3 focal pieces. For "ruined", "broken" or "overgrown" themes also use the style's own damage settings.\n- Pick pieces whose tags suit the theme. Ids not in the lists below are discarded, so never invent ids. If a list is empty or nothing fits the theme, skip that layer.
 - When the player asks for changes, return the COMPLETE updated style object including its layers.
 
 LIBRARY (id, then facing for edges, then size in blocks, then tags):
@@ -991,10 +994,10 @@ std::vector<DraftSpec> ArtAgentPopup::generateDraft(matjson::Value v) {
 	auto genLibrary = [&]() {
 		std::vector<DraftSpec> out;
 		m_libNote.clear();
-		auto layers = arrOf(v["layers"]);
-		if (layers.empty()) return out;
 		auto& lib = ArtLibrary::get();
-		if (!lib.load()) { m_libNote = "[library file not found: layers ignored]"; return out; }
+		if (!lib.load()) { m_libNote = "[art library NOT loaded: procedural style only. Check the Geode log for 'Art Agent']"; return out; }
+		auto layers = arrOf(v["layers"]);
+		if (layers.empty()) { m_libNote = "[library loaded, but this design has no library layers]"; return out; }
 		constexpr float kEdgeInset = 0.3f; // fraction of an edge piece's depth sunk into the block (tune by eye)
 
 		float occupied = 0.f;
@@ -1096,23 +1099,57 @@ std::vector<DraftSpec> ArtAgentPopup::generateDraft(matjson::Value v) {
 						}
 					}
 				}
+				// slopes: lay pieces along each hypotenuse whose outward normal points (mostly) the way `dir` does
+				for (auto const& t : m_tris) {
+					float hx = t.bx - t.ax, hy = t.by - t.ay, hl = std::hypot(hx, hy);
+					if (hl < 0.5f) continue;
+					float tx = hx / hl, ty = hy / hl;
+					float nx = (t.ax + t.bx) / 2 - t.px, ny = (t.ay + t.by) / 2 - t.py, nl = std::hypot(nx, ny);
+					if (nl < 1e-3f) continue;
+					nx /= nl; ny /= nl; // outward normal: away from the right-angle vertex
+					int nd = 0; float bestDot = -2.f;
+					for (int q : {0, 2, 1, 3}) { // nearest axis direction; 45-degree ties go to up/down
+						float dp = nx * DX[q] + ny * DY[q];
+						if (dp > bestDot + 1e-4f) { bestDot = dp; nd = q; }
+					}
+					if (nd != dir) continue;
+					float nAng = std::atan2(nx, ny) * 57.29578f; // clockwise degrees from "up"
+					float pos = 0.f;
+					while (pos < hl - 0.2f) {
+						auto* e = pick();
+						int fidx = e->facing == "up" ? 0 : e->facing == "right" ? 1 : e->facing == "down" ? 2 : e->facing == "left" ? 3 : -1;
+						if (fidx < 0) break;
+						float rot = nAng - (float)fidx * 90.f;
+						bool fvert = fidx % 2 == 0;
+						float along = fvert ? e->w : e->h, depth = fvert ? e->h : e->w;
+						if (along < 0.05f) break;
+						float remaining = hl - pos;
+						float sc = frand(g, 0.9f, 1.15f);
+						if (along * sc > remaining) sc = remaining / along;
+						if (sc < 0.75f) break;
+						float step = along * sc, c = pos + step / 2, off = depth * sc * (0.5f - kEdgeInset);
+						got.push_back(make(e, t.ax + tx * c + nx * off, t.ay + ty * c + ny * off, rot, sc));
+						pos += step;
+					}
+				}
 			} else {
 				bool focal = kind == "focal";
 				int target = focal ? (int)std::clamp(dbl(layer, "count", 2.0), 1.0, 4.0)
-				                   : (int)(occupied * std::clamp(dbl(layer, "density", 0.04), 0.0, 0.12));
+				                   : std::max(occupied >= 4.f ? 3 : 1,
+				                              (int)std::lround(occupied * std::clamp(dbl(layer, "density", 0.12), 0.0, 0.3)));
 				float spacing = (float)std::clamp(dbl(layer, "min_spacing", focal ? 4.0 : 1.5), 0.5, 8.0);
 				std::vector<std::pair<float, float>> placed;
 				for (int tries = 0; tries < target * 40 && (int)got.size() < target; tries++) {
 					float x = frand(g, 0.f, (float)m_cols), y = frand(g, 0.f, (float)m_rows);
 					auto* e = pick();
 					float sc = focal ? frand(g, 1.f, 1.3f) : frand(g, 0.85f, 1.2f);
-					float hw = e->w * sc / 2, hh = e->h * sc / 2;
-					// the whole footprint must sit inside the structure (slopes included)
+					float hw = e->w * sc / 2 * 0.7f, hh = e->h * sc / 2 * 0.7f; // 70% footprint: details may touch the border
+					// the footprint must sit inside the structure (slopes included)
 					if (!(occ(x, y) && occ(x - hw, y - hh) && occ(x + hw, y - hh) && occ(x - hw, y + hh) && occ(x + hw, y + hh))) continue;
 					if (region == "top_edges" && occ(x, y + hh + 0.7f)) continue; // keep it near a top surface
-					bool farEnough = true;
-					for (auto& p : placed) if (std::hypot(x - p.first, y - p.second) < spacing) { farEnough = false; break; }
-					if (!farEnough) continue;
+					bool far = true;
+					for (auto& p : placed) if (std::hypot(x - p.first, y - p.second) < spacing) { far = false; break; }
+					if (!far) continue;
 					placed.push_back({x, y});
 					got.push_back(make(e, x, y, focal ? 0.f : frand(g, -15.f, 15.f), sc));
 				}
