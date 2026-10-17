@@ -1147,9 +1147,9 @@ std::vector<DraftSpec> ArtAgentPopup::generateDraft(matjson::Value v) {
 					// the footprint must sit inside the structure (slopes included)
 					if (!(occ(x, y) && occ(x - hw, y - hh) && occ(x + hw, y - hh) && occ(x - hw, y + hh) && occ(x + hw, y + hh))) continue;
 					if (region == "top_edges" && occ(x, y + hh + 0.7f)) continue; // keep it near a top surface
-					bool far = true;
-					for (auto& p : placed) if (std::hypot(x - p.first, y - p.second) < spacing) { far = false; break; }
-					if (!far) continue;
+					bool spaced = true;
+					for (auto& p : placed) if (std::hypot(x - p.first, y - p.second) < spacing) { spaced = false; break; }
+					if (!spaced) continue;
 					placed.push_back({x, y});
 					got.push_back(make(e, x, y, focal ? 0.f : frand(g, -15.f, 15.f), sc));
 				}
