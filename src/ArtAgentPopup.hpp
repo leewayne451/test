@@ -9,7 +9,9 @@ struct DraftSpec {
 	int id = 1;
 	float x = 0, y = 0, rot = 0, sx = 1, sy = 1;
 	std::string color = "#FFFFFF";
+	std::string color2; // detail-layer colour (library objects only; empty = leave as is)
 	bool front = true;
+	bool lib = false;   // real library object: must be a pure decoration (checked when spawned)
 };
 
 // A slope as a right triangle in grid units: right-angle vertex P, horizontal leg end A, vertical leg end B.
@@ -31,6 +33,8 @@ protected:
 	std::string m_mortarHex;
 	bool m_busy = false;
 	bool m_overhang = false;
+	std::string m_libNote;     // one-line summary of the library layers, shown to the player
+	int m_rejectedSolid = 0;   // library objects dropped because they were not pure decorations
 	unsigned m_seed = 0; // layout seed: fixed for the life of the panel, so follow-up requests keep the same brick layout
 
 	TextInput* m_prompt = nullptr;

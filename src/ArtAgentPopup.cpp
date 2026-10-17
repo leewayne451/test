@@ -4,6 +4,7 @@
 #include <Geode/utils/file.hpp>
 #include "ArtAgentPopup.hpp"
 #include "Palette.hpp"
+#include "ArtLibrary.hpp"
 #include <algorithm>
 #include <map>
 #include <sstream>
@@ -247,6 +248,30 @@ Rules that matter:
 If the user asks for changes, return the COMPLETE updated style object.)PROMPT";
 }
 
+
+// Extra instructions + the library itself. Empty when art_library.json is missing, so the mod falls back to the
+// procedural style only.
+static std::string libraryBlock() {
+	auto& lib = ArtLibrary::get();
+	if (!lib.load()) return "";
+	auto r = geode::utils::file::readString(Mod::get()->getResourcesDir() / "library_prompt.txt");
+	if (r.isErr() || r.unwrap().empty()) return "";
+	return std::string(R"GUIDE(
+
+OPTIONAL "layers": real decoration objects placed ON TOP of the procedural style, to add detail and character. The mod computes every position, rotation and scale; you only choose objects, regions and colors. Add "layers" to the style object when it improves the design; 2 to 4 layers is typical, and omitting them is fine for plain materials.
+"layers":[{"name":"top_trim","kind":"edge","region":"top_edges","objects":[{"id":123,"weight":3},{"id":456}],"color":{"base":"colors[1]","detail":"edge"},"budget":0.08}, {"name":"details","kind":"scatter","region":"interior","objects":[{"id":789}],"density":0.04,"min_spacing":1.5,"color":{"base":"accent"},"budget":0.06}, {"name":"statues","kind":"focal","region":"interior","objects":[{"id":901}],"count":2,"budget":0.03}]
+- kind "edge": pieces laid end to end along exposed surfaces. region is top_edges, bottom_edges, left_edges or right_edges. Use ONLY ids from the EDGE list; the mod rotates each piece so its exposed face points the right way, but pieces whose facing matches the region look best.
+- kind "scatter": small details spread over the structure. region interior (default) or top_edges. density 0.01 to 0.1 per block, min_spacing in blocks (1 to 3). Use ONLY ids from the SCATTER list.
+- kind "focal": count (1 to 4) large eye-catching pieces. region interior or top_edges. Use ONLY ids from the FOCAL list.
+- color.base / color.detail: "colors[i]" (i = 0 for the darkest), "mortar", "edge" or "accent" (the style's own colors; preferred), or a "#RRGGBB" hex. Use at most 2 hex colors in total across all layers.
+- budget: share of the object limit for that layer (0.02 to 0.15). All layers together are capped at 0.3.
+- Pick pieces whose tags suit the theme. Ids not in the lists below are discarded, so never invent ids. If a list is empty or nothing fits the theme, skip that layer.
+- When the player asks for changes, return the COMPLETE updated style object including its layers.
+
+LIBRARY (id, then facing for edges, then size in blocks, then tags):
+)GUIDE") + r.unwrap();
+}
+
 std::string ArtAgentPopup::stateNote() {
 	return fmt::format("Object limit: {}. Overhang beyond the structure: {}.",
 		limit(), m_overhang ? "allowed" : "NOT allowed (stay inside the bounding box)");
@@ -407,7 +432,7 @@ void ArtAgentPopup::request(std::string userMsg) {
 	});
 	if (legacyThinking) genCfg["thinkingConfig"] = matjson::makeObject({{"thinkingBudget", 0}});
 	auto body = matjson::makeObject({
-		{"systemInstruction", matjson::makeObject({{"parts", textParts(systemPrompt())}})},
+		{"systemInstruction", matjson::makeObject({{"parts", textParts(systemPrompt() + libraryBlock())}})},
 		{"contents", contents},
 		{"generationConfig", genCfg},
 	});
@@ -481,7 +506,10 @@ void ArtAgentPopup::handleReply(std::string text) {
 		this->clearDraft();
 		this->spawnDraft(gen);
 		this->setCount();
-		this->say(v["summary"].asString().unwrapOr("Here's a draft.") + "\n" + this->styleReadout(v));
+		std::string note = m_libNote;
+		if (m_rejectedSolid > 0) note += fmt::format(" {} non-decoration objects skipped (see log).", m_rejectedSolid);
+		std::string tail = note.empty() ? std::string() : "\n" + note;
+		this->say(v["summary"].asString().unwrapOr("Here's a draft.") + "\n" + this->styleReadout(v) + tail);
 		return;
 	}
 
@@ -958,6 +986,144 @@ std::vector<DraftSpec> ArtAgentPopup::generateDraft(matjson::Value v) {
 	};
 
 	int L = limit();
+	// ---- 6) library layers: real decoration objects from art_library.json, placed by the layers the model chose.
+	// The model only names ids, regions and colours; positions, rotations and scales are computed here.
+	auto genLibrary = [&]() {
+		std::vector<DraftSpec> out;
+		m_libNote.clear();
+		auto layers = arrOf(v["layers"]);
+		if (layers.empty()) return out;
+		auto& lib = ArtLibrary::get();
+		if (!lib.load()) { m_libNote = "[library file not found: layers ignored]"; return out; }
+		constexpr float kEdgeInset = 0.3f; // fraction of an edge piece's depth sunk into the block (tune by eye)
+
+		float occupied = 0.f;
+		for (int j = 0; j < m_rows; j++) for (int i = 0; i < m_cols; i++) if (rows[j][i] == '#') occupied += 1.f;
+		for (auto const& t : m_tris) occupied += 0.5f * std::abs(t.ax - t.px) * std::abs(t.by - t.py);
+
+		// colour names -> hex. Style colours first, so library layers add (almost) no new colour channels.
+		int newColors = 0, unknown = 0, used = 0;
+		auto colorOf = [&](matjson::Value& cv, char const* key, std::string const& fallback) -> std::string {
+			std::string name = str(cv, key, "");
+			if (name.empty()) return fallback;
+			if (name.rfind("colors[", 0) == 0) return base[std::clamp(std::atoi(name.c_str() + 7), 0, (int)base.size() - 1)];
+			if (name == "mortar") return mortar;
+			if (name == "edge") return edgeColor;
+			if (name == "accent") return accColor;
+			auto h = hex(name, "");
+			if (cc3bFromHexString(h).isOk() && newColors < 2) { newColors++; return h; }
+			return fallback;
+		};
+
+		int li = 0;
+		for (auto& layer : layers) {
+			std::string kind = str(layer, "kind", "");
+			if (kind != "edge" && kind != "scatter" && kind != "focal") continue;
+			std::string region = str(layer, "region", kind == "edge" ? "top_edges" : "interior");
+			float budget = (float)std::clamp(dbl(layer, "budget", 0.05), 0.01, 0.15);
+			// all library layers together may use at most 30% of the object limit (counted by what is actually placed)
+			size_t room = (size_t)std::max(0.f, 0.3f * (float)L - (float)out.size());
+			if (room < 1) break;
+			size_t cap = std::min(room, std::max<size_t>(1, (size_t)(L * budget)));
+			std::mt19937 g(seed + 100 + li++);
+
+			// weighted pool of valid objects (id must exist in the library AND have this layer's role)
+			std::vector<std::pair<LibObj const*, float>> pool;
+			float wsum = 0.f;
+			for (auto& o : arrOf(layer["objects"])) {
+				auto* e = lib.find((int)o["id"].asInt().unwrapOr(0));
+				if (!e || e->role != kind) { unknown++; continue; }
+				float wt = (float)std::clamp(o["weight"].asDouble().unwrapOr(1.0), 0.1, 10.0);
+				pool.push_back({e, wt});
+				wsum += wt;
+			}
+			if (pool.empty()) continue;
+			auto pick = [&]() {
+				float r = frand(g, 0.f, wsum);
+				for (auto& [e, wt] : pool) { if ((r -= wt) <= 0.f) return e; }
+				return pool.back().first;
+			};
+
+			auto cv = layer["color"];
+			std::string c1 = colorOf(cv, "base", base.back());
+			std::string c2 = colorOf(cv, "detail", "");
+			auto make = [&](LibObj const* e, float x, float y, float rot, float sc) {
+				DraftSpec s;
+				s.id = e->id; s.x = x; s.y = y; s.rot = rot; s.sx = sc; s.sy = sc; // uniform scale: textures must not distort
+				s.color = c1; s.color2 = c2; s.front = true; s.lib = true;
+				return s;
+			};
+
+			std::vector<DraftSpec> got;
+			if (kind == "edge") {
+				// dir: 0 top, 1 right, 2 bottom, 3 left = the way the exposed face points
+				int dir = region == "top_edges" ? 0 : region == "right_edges" ? 1 : region == "bottom_edges" ? 2 : region == "left_edges" ? 3 : -1;
+				if (dir < 0) continue;
+				static float const DX[4] = {0.f, 1.f, 0.f, -1.f}, DY[4] = {1.f, 0.f, -1.f, 0.f};
+				bool horiz = dir == 0 || dir == 2; // the surface runs along x
+				int nOuter = horiz ? m_rows : m_cols, nInner = horiz ? m_cols : m_rows;
+				for (int a = 0; a < nOuter; a++) {
+					auto exposed = [&](int bb) {
+						int i = horiz ? bb : a, j = horiz ? a : bb;
+						return rows[j][i] == '#' && !occ(i + 0.5f + DX[dir] * 0.58f, j + 0.5f + DY[dir] * 0.58f);
+					};
+					int b = 0;
+					while (b < nInner) {
+						if (!exposed(b)) { b++; continue; }
+						int st = b;
+						while (b < nInner && exposed(b)) b++;
+						// lay pieces end to end along the run [st, b)
+						float pos = (float)st;
+						while (pos < (float)b - 0.2f) {
+							auto* e = pick();
+							int fidx = e->facing == "up" ? 0 : e->facing == "right" ? 1 : e->facing == "down" ? 2 : e->facing == "left" ? 3 : -1;
+							if (fidx < 0) break; // unoriented pieces can't be used as edges
+							float rot = (float)(((dir - fidx) % 4 + 4) % 4) * 90.f; // clockwise degrees
+							bool fvert = fidx % 2 == 0; // outer face along the piece's own height
+							float along = fvert ? e->w : e->h, depth = fvert ? e->h : e->w;
+							if (along < 0.05f) break;
+							float remaining = (float)b - pos;
+							float sc = frand(g, 0.9f, 1.15f);
+							if (along * sc > remaining) sc = remaining / along;
+							if (sc < 0.75f) break; // leftover gap too small for this piece
+							float step = along * sc, c = pos + step / 2, d = depth * sc;
+							float off = d * (0.5f - kEdgeInset);
+							float surf = (dir == 0 || dir == 1) ? (float)a + 1.f : (float)a;
+							float x = horiz ? c : surf + DX[dir] * off;
+							float y = horiz ? surf + DY[dir] * off : c;
+							got.push_back(make(e, x, y, rot, sc));
+							pos += step;
+						}
+					}
+				}
+			} else {
+				bool focal = kind == "focal";
+				int target = focal ? (int)std::clamp(dbl(layer, "count", 2.0), 1.0, 4.0)
+				                   : (int)(occupied * std::clamp(dbl(layer, "density", 0.04), 0.0, 0.12));
+				float spacing = (float)std::clamp(dbl(layer, "min_spacing", focal ? 4.0 : 1.5), 0.5, 8.0);
+				std::vector<std::pair<float, float>> placed;
+				for (int tries = 0; tries < target * 40 && (int)got.size() < target; tries++) {
+					float x = frand(g, 0.f, (float)m_cols), y = frand(g, 0.f, (float)m_rows);
+					auto* e = pick();
+					float sc = focal ? frand(g, 1.f, 1.3f) : frand(g, 0.85f, 1.2f);
+					float hw = e->w * sc / 2, hh = e->h * sc / 2;
+					// the whole footprint must sit inside the structure (slopes included)
+					if (!(occ(x, y) && occ(x - hw, y - hh) && occ(x + hw, y - hh) && occ(x - hw, y + hh) && occ(x + hw, y + hh))) continue;
+					if (region == "top_edges" && occ(x, y + hh + 0.7f)) continue; // keep it near a top surface
+					bool far = true;
+					for (auto& p : placed) if (std::hypot(x - p.first, y - p.second) < spacing) { far = false; break; }
+					if (!far) continue;
+					placed.push_back({x, y});
+					got.push_back(make(e, x, y, focal ? 0.f : frand(g, -15.f, 15.f), sc));
+				}
+			}
+			if (got.size() > cap) { std::shuffle(got.begin(), got.end(), g); got.resize(cap); }
+			if (!got.empty()) { used++; out.insert(out.end(), got.begin(), got.end()); }
+		}
+		m_libNote = fmt::format("[library: {} layers, {} objects{}]", used, out.size(),
+			unknown ? fmt::format(", {} unknown or wrong-role ids ignored", unknown) : std::string());
+		return out;
+	};
 	auto backing = genBacking();
 	auto shade = genShade();
 	auto trimBands = genTrim();
@@ -965,6 +1131,7 @@ std::vector<DraftSpec> ArtAgentPopup::generateDraft(matjson::Value v) {
 	auto edge = genEdge();   // also fills glowLayer
 	auto acc = genAccent();  // also fills accGlowLayer
 	auto outline = genOutline();
+	auto libLayers = genLibrary();
 	std::vector<DraftSpec> glow = glowLayer;
 	glow.insert(glow.end(), accGlowLayer.begin(), accGlowLayer.end());
 
@@ -979,7 +1146,7 @@ std::vector<DraftSpec> ArtAgentPopup::generateDraft(matjson::Value v) {
 	if ((int)bottomGlow.size() > (int)(L * 0.1f)) bottomGlow.clear();
 	auto reserveOf = [&]() {
 		return (int)(backing.size() + shade.size() + trimBands.size() + bottomGlow.size()
-			+ glow.size() + edge.size() + acc.size() + outline.size());
+			+ glow.size() + edge.size() + acc.size() + outline.size() + libLayers.size());
 	};
 	if (reserveOf() > (int)(L * 0.6f)) { outline.clear(); acc.clear(); glow.clear(); shade.clear(); trimBands.clear(); bottomGlow.clear(); }
 	if (reserveOf() > (int)(L * 0.6f)) backing.clear();
@@ -1013,6 +1180,7 @@ std::vector<DraftSpec> ArtAgentPopup::generateDraft(matjson::Value v) {
 	for (auto& s2 : acc) all.push_back(s2);
 	for (auto& s2 : outline) all.push_back(s2);
 	for (auto& s2 : edge) all.push_back(s2);
+	for (auto& s2 : libLayers) all.push_back(s2); // real objects go on top of everything procedural
 	return all;
 }
 
@@ -1034,6 +1202,7 @@ void ArtAgentPopup::clearDraft() {
 
 void ArtAgentPopup::spawnDraft(std::vector<DraftSpec> const& specs) {
 	auto lel = m_ui->m_editorLayer;
+	m_rejectedSolid = 0;
 	std::vector<GJEffectManager*> mgrs;
 	if (lel->m_levelSettings && lel->m_levelSettings->m_effectManager)
 		mgrs.push_back(lel->m_levelSettings->m_effectManager);
@@ -1109,12 +1278,23 @@ void ArtAgentPopup::spawnDraft(std::vector<DraftSpec> const& specs) {
 		auto pos = ccp(m_origin.x + s.x * B, m_origin.y + s.y * B);
 		auto obj = lel->createObject(s.id, pos, false);
 		if (!obj) continue;
+		// library objects must be pure decorations: a solid block or hazard would change how the level plays
+		if (s.lib && obj->m_objectType != GameObjectType::Decoration) {
+			log::warn("Art Agent: library object {} is not a pure decoration (type {}), skipped; remove it from art_library.json", s.id, (int)obj->m_objectType);
+			lel->removeObject(obj, true);
+			m_rejectedSolid++;
+			continue;
+		}
 		obj->setRotation(s.rot);
 		obj->updateCustomScaleX(s.sx);
 		obj->updateCustomScaleY(s.sy);
 		if (s.front) obj->m_zLayer = ZLayer::T1;
 		obj->m_editorLayer = (short)layer;
 		tint(obj, chanFor(s.color));
+		if (!s.color2.empty() && obj->m_detailColor) {
+			int ch2 = chanFor(s.color2);
+			if (ch2 >= 0) { obj->m_detailColor->m_colorID = ch2; obj->m_detailColor->m_usesHSV = false; }
+		}
 		fresh->addObject(obj);
 		m_draft.push_back(obj);
 	}
